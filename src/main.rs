@@ -24,14 +24,25 @@ impl Default for Nonterminal {
 
 fn main() {
     use Nonterminal::*;
+    // @skip whitespace {
+    //     expression ::= sum;
+    //     sum ::= primary ('+' primary)*;
+    //     primary ::= number | '(' sum ')';
+    // }
+    // whitespace ::= [ \t\r\n]+;
+    // number ::= [0-9]+;
     let definitions: HashMap<Nonterminal, Box<dyn Parsable<Nonterminal> + Sync>> = hashmap![
-        Expression => nt!(Sum),
-        Sum => cat!(nt!(Primary), rep!(cat!(lit!("+"), nt!(Primary)), Some(0), None)),
-        Primary => alt!(nt!(Number), cat!(lit!("("), nt!(Sum), lit!(")"))),
+        Expression => cat!(skp!(nt!(Whitespace)), nt!(Sum), skp!(nt!(Whitespace))),
+        Sum => cat!(skp!(nt!(Whitespace)), nt!(Primary), skp!(nt!(Whitespace)),
+            rep!(cat!(skp!(nt!(Whitespace)), lit!("+"), skp!(nt!(Whitespace)), nt!(Primary),
+            skp!(nt!(Whitespace))), Some(0), None), skp!(nt!(Whitespace))),
+        Primary => alt!(cat!(skp!(nt!(Whitespace)), nt!(Number), skp!(nt!(Whitespace))),
+            cat!(skp!(nt!(Whitespace)), lit!("("), skp!(nt!(Whitespace)), nt!(Sum),
+            skp!(nt!(Whitespace)), lit!(")"), skp!(nt!(Whitespace)))),
         Whitespace => rep!(chc!("[ \\t\\r\\n]"), Some(1), None),
         Number => rep!(chc!("[0-9]"), Some(1), None)
     ];
-    match nt!(Expression).parse("(1+2)+3", &definitions) {
+    match nt!(Expression).parse("(1+ \n2)+3", &definitions) {
         Ok(tree) => println!("{:#?}", tree),
         Err(msg) => println!("{}", msg),
     }
