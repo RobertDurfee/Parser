@@ -42,7 +42,7 @@ fn main() {
         Nonterminal::Word => lit!("\\w"),
         Nonterminal::NonWord => lit!("\\W")
     ];
-    match nt!(Nonterminal::CharacterClass).parse("[^\\w-\\W]", &definitions) {
+    match nt!(Nonterminal::CharacterClass).parse("[^abc]", &definitions) {
         Ok(tree) => println!("{:#?}", tree),
         Err(msg) => println!("Error: {}", msg),
     }
