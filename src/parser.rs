@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::fmt::Debug;
+use crate::char_class;
 
 #[derive(Clone, Debug)]
 pub struct ParseTree<T> {
@@ -52,6 +53,33 @@ impl<T: Clone + Default> Parsable<T> for Alternation<T> {
             }
         }
         return Result::Err(format!("Input '{}' does not match any alternation", input));
+    }
+}
+
+pub struct CharacterClass<T> {
+    parsable: Box<dyn Parsable<T> + Sync>,
+}
+
+impl <T: Clone + Default + 'static> CharacterClass<T> {
+    pub fn new(expression: &str) -> Self {
+        let mut parsables: Vec<Box<dyn Parsable<T> + Sync>> = Vec::new();
+        match char_class::characters(expression) {
+            Ok(characters) => {
+                for character in characters {
+                    parsables.push(Box::new(Literal::new(&character.to_string())));
+                }
+                return CharacterClass {
+                    parsable: Box::new(Alternation::new(parsables)),
+                }
+            },
+            _ => panic!("Invalid character class: '{}'", expression),
+        }
+    }
+}
+
+impl<T> Parsable<T> for CharacterClass<T> {
+    fn parse(&self, input: &str, definitions: &HashMap<T, Box<dyn Parsable<T> + Sync>>) -> Result<ParseTree<T>, String> {
+        return self.parsable.parse(input, definitions);
     }
 }
 
@@ -229,6 +257,14 @@ macro_rules! cat {
             temp_vec.push($x);
         )*
         let ret: Box<dyn crate::parser::Parsable<_> + Sync> = Box::new(crate::parser::Concatenation::new(temp_vec));
+        ret
+    }}
+}
+
+#[macro_export]
+macro_rules! chc {
+    ($x:expr) => {{
+        let ret: Box<dyn crate::parser::Parsable<_> + Sync> = Box::new(crate::parser::CharacterClass::new($x));
         ret
     }}
 }
