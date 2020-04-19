@@ -3,15 +3,15 @@ use std::hash::Hash;
 use std::fmt::Debug;
 
 #[derive(Clone, Debug)]
-pub struct ParseTree<T: Clone + Debug + Default + Hash + PartialEq + Eq> {
-    name: T,
-    contents: String,
+pub struct ParseTree<T: Sync + Clone + Debug + Default + Hash + PartialEq + Eq> {
+    pub name: T,
+    pub contents: String,
     all_contents: String,
-    children: Vec<ParseTree<T>>,
+    pub children: Vec<ParseTree<T>>,
     is_nonterminal: bool,
 }
 
-impl<T: Clone + Debug + Default + Hash + PartialEq + Eq> ParseTree<T> {
+impl<T: Sync + Clone + Debug + Default + Hash + PartialEq + Eq> ParseTree<T> {
     pub fn new(name: &T, contents: &str, all_contents: &str, children: Vec<ParseTree<T>>, is_nonterminal: bool) -> Self {
         return ParseTree {
             name: name.clone(),
@@ -23,22 +23,22 @@ impl<T: Clone + Debug + Default + Hash + PartialEq + Eq> ParseTree<T> {
     }
 }
 
-pub trait Parsable<T: Clone + Debug + Default + Hash + PartialEq + Eq> {
-    fn parse(&self, input: &str, definitions: &HashMap<T, Box<dyn Parsable<T>>>) -> Result<ParseTree<T>, String>;
+pub trait Parsable<T: Sync + Clone + Debug + Default + Hash + PartialEq + Eq> {
+    fn parse(&self, input: &str, definitions: &HashMap<T, Box<dyn Parsable<T> + Sync>>) -> Result<ParseTree<T>, String>;
 }
 
 pub struct Alternation<T> {
-    parsables: Vec<Box<dyn Parsable<T>>>,
+    parsables: Vec<Box<dyn Parsable<T> + Sync>>,
 }
 
 impl<T> Alternation<T> {
-    pub fn new(parsables: Vec<Box<dyn Parsable<T>>>) -> Self {
+    pub fn new(parsables: Vec<Box<dyn Parsable<T> + Sync>>) -> Self {
         return Alternation { parsables };
     }
 }
 
-impl<T: Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Alternation<T> {
-    fn parse(&self, input: &str, definitions: &HashMap<T, Box<dyn Parsable<T>>>) -> Result<ParseTree<T>, String> {
+impl<T: Sync + Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Alternation<T> {
+    fn parse(&self, input: &str, definitions: &HashMap<T, Box<dyn Parsable<T> + Sync>>) -> Result<ParseTree<T>, String> {
         for parsable in &self.parsables {
             match parsable.parse(input, definitions) {
                 Result::Ok(tree) => {
@@ -56,17 +56,17 @@ impl<T: Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Alterna
 }
 
 pub struct Concatenation<T> {
-    parsables: Vec<Box<dyn Parsable<T>>>,
+    parsables: Vec<Box<dyn Parsable<T> + Sync>>,
 }
 
 impl<T> Concatenation<T> {
-    pub fn new(parsables: Vec<Box<dyn Parsable<T>>>) -> Self {
+    pub fn new(parsables: Vec<Box<dyn Parsable<T> + Sync>>) -> Self {
         return Concatenation { parsables };
     }
 }
 
-impl<T: Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Concatenation<T> {
-    fn parse(&self, input: &str, definitions: &HashMap<T, Box<dyn Parsable<T>>>) -> Result<ParseTree<T>, String> {
+impl<T: Sync + Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Concatenation<T> {
+    fn parse(&self, input: &str, definitions: &HashMap<T, Box<dyn Parsable<T> + Sync>>) -> Result<ParseTree<T>, String> {
         let mut offset = 0;
         let mut contents = String::new();
         let mut children = Vec::new();
@@ -98,8 +98,8 @@ impl Literal {
     }
 }
 
-impl<T: Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Literal {
-    fn parse(&self, input: &str, _definitions: &HashMap<T, Box<dyn Parsable<T>>>) -> Result<ParseTree<T>, String> {
+impl<T: Sync + Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Literal {
+    fn parse(&self, input: &str, _definitions: &HashMap<T, Box<dyn Parsable<T> + Sync>>) -> Result<ParseTree<T>, String> {
         if input.len() < self.value.len() {
             return Result::Err(format!("Input '{}' is shorter than value '{}' to match", input, self.value));
         } else if &input[..self.value.len()] == self.value {
@@ -120,8 +120,8 @@ impl<T> Nonterminal<T> {
     }
 }
 
-impl<T: Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Nonterminal<T> {
-    fn parse(&self, input: &str, definitions: &HashMap<T, Box<dyn Parsable<T>>>) -> Result<ParseTree<T>, String> {
+impl<T: Sync + Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Nonterminal<T> {
+    fn parse(&self, input: &str, definitions: &HashMap<T, Box<dyn Parsable<T> + Sync>>) -> Result<ParseTree<T>, String> {
         match definitions.get(&self.name) {
             Some(parsable) => {
                 match parsable.parse(input, definitions) {
@@ -141,13 +141,13 @@ impl<T: Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Nonterm
 }
 
 pub struct Repetition<T> {
-    parsable: Box<dyn Parsable<T>>,
+    parsable: Box<dyn Parsable<T> + Sync>,
     min: Option<u32>,
     max: Option<u32>,
 }
 
 impl<T> Repetition<T> {
-    pub fn new(parsable: Box<dyn Parsable<T>>, min: Option<u32>, max: Option<u32>) -> Self {
+    pub fn new(parsable: Box<dyn Parsable<T> + Sync>, min: Option<u32>, max: Option<u32>) -> Self {
         return Repetition { 
             parsable,
             min,
@@ -156,8 +156,8 @@ impl<T> Repetition<T> {
     }
 }
 
-impl<T: Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Repetition<T> {
-    fn parse(&self, input: &str, definitions: &HashMap<T, Box<dyn Parsable<T>>>) -> Result<ParseTree<T>, String> {
+impl<T: Sync + Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Repetition<T> {
+    fn parse(&self, input: &str, definitions: &HashMap<T, Box<dyn Parsable<T> + Sync>>) -> Result<ParseTree<T>, String> {
         let mut offset = 0;
         let mut contents = String::new();
         let mut children = Vec::new();
@@ -188,17 +188,17 @@ impl<T: Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Repetit
 }
 
 pub struct Skip<T> {
-    parsable: Box<dyn Parsable<T>>,
+    parsable: Box<dyn Parsable<T> + Sync>,
 }
 
 impl<T> Skip<T> {
-    pub fn new(parsable: Box<dyn Parsable<T>>) -> Self {
+    pub fn new(parsable: Box<dyn Parsable<T> + Sync>) -> Self {
         return Skip { parsable };
     }
 }
 
-impl<T: Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Skip<T> {
-    fn parse(&self, input: &str, definitions: &HashMap<T, Box<dyn Parsable<T>>>) -> Result<ParseTree<T>, String> {
+impl<T: Sync + Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Skip<T> {
+    fn parse(&self, input: &str, definitions: &HashMap<T, Box<dyn Parsable<T> + Sync>>) -> Result<ParseTree<T>, String> {
         let mut offset = 0;
         loop {
             match self.parsable.parse(&input[offset..], definitions) {
@@ -216,7 +216,7 @@ macro_rules! alt {
         $(
             temp_vec.push($x);
         )*
-        let ret: Box<dyn parser::Parsable<_>> = Box::new(parser::Alternation::new(temp_vec));
+        let ret: Box<dyn crate::parser::Parsable<_> + Sync> = Box::new(crate::parser::Alternation::new(temp_vec));
         ret
     }}
 }
@@ -228,7 +228,7 @@ macro_rules! cat {
         $(
             temp_vec.push($x);
         )*
-        let ret: Box<dyn parser::Parsable<_>> = Box::new(parser::Concatenation::new(temp_vec));
+        let ret: Box<dyn crate::parser::Parsable<_> + Sync> = Box::new(crate::parser::Concatenation::new(temp_vec));
         ret
     }}
 }
@@ -236,7 +236,7 @@ macro_rules! cat {
 #[macro_export]
 macro_rules! lit {
     ($x:expr) => {{
-        let ret: Box<dyn parser::Parsable<_>> = Box::new(parser::Literal::new($x));
+        let ret: Box<dyn crate::parser::Parsable<_> + Sync> = Box::new(crate::parser::Literal::new($x));
         ret
     }}
 }
@@ -244,7 +244,7 @@ macro_rules! lit {
 #[macro_export]
 macro_rules! nt {
     ($x:expr) => {{
-        let ret: Box<dyn parser::Parsable<_>> = Box::new(parser::Nonterminal::new($x));
+        let ret: Box<dyn crate::parser::Parsable<_> + Sync> = Box::new(crate::parser::Nonterminal::new($x));
         ret
     }}
 }
@@ -252,7 +252,7 @@ macro_rules! nt {
 #[macro_export]
 macro_rules! rep {
     ($x:expr, $y:expr, $z:expr) => {{
-        let ret: Box<dyn parser::Parsable<_>> = Box::new(parser::Repetition::new($x, $y, $z));
+        let ret: Box<dyn crate::parser::Parsable<_> + Sync> = Box::new(crate::parser::Repetition::new($x, $y, $z));
         ret
     }}
 }
@@ -260,7 +260,7 @@ macro_rules! rep {
 #[macro_export]
 macro_rules! skp {
     ($x:expr) => {{
-        let ret: Box<dyn parser::Parsable<_>> = Box::new(parser::Skip::new($x));
+        let ret: Box<dyn crate::parser::Parsable<_> + Sync> = Box::new(crate::parser::Skip::new($x));
         ret
     }}
 }
