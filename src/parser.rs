@@ -41,17 +41,17 @@ impl<T: Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Alterna
     fn parse(&self, input: &str, definitions: &HashMap<T, Box<dyn Parsable<T>>>) -> Result<ParseTree<T>, String> {
         for parsable in &self.parsables {
             match parsable.parse(input, definitions) {
-                Ok(tree) => {
+                Result::Ok(tree) => {
                     if tree.is_nonterminal {
-                        return Ok(ParseTree::new(&Default::default(), &tree.contents, &tree.all_contents, vec![tree.clone()], false));
+                        return Result::Ok(ParseTree::new(&Default::default(), &tree.contents, &tree.all_contents, vec![tree.clone()], false));
                     } else {
-                        return Ok(ParseTree::new(&Default::default(), &tree.contents, &tree.all_contents, tree.children, false));
+                        return Result::Ok(ParseTree::new(&Default::default(), &tree.contents, &tree.all_contents, tree.children, false));
                     }
                 },
-                Err(_) => continue,
+                Result::Err(_) => continue,
             }
         }
-        return Err(format!("Input '{}' does not match any alternation", input));
+        return Result::Err(format!("Input '{}' does not match any alternation", input));
     }
 }
 
@@ -72,7 +72,7 @@ impl<T: Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Concate
         let mut children = Vec::new();
         for parsable in &self.parsables {
             match parsable.parse(&input[offset..], definitions) {
-                Ok(tree) => {
+                Result::Ok(tree) => {
                     offset += tree.all_contents.len();
                     contents.push_str(&tree.contents);
                     if tree.is_nonterminal {
@@ -81,10 +81,10 @@ impl<T: Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Concate
                         children.extend(tree.children);
                     }
                 },
-                Err(msg) => return Err(msg),
+                Result::Err(msg) => return Result::Err(msg),
             }
         }
-        return Ok(ParseTree::new(&Default::default(), &contents, &input[..offset], children, false));
+        return Result::Ok(ParseTree::new(&Default::default(), &contents, &input[..offset], children, false));
     }
 }
 
@@ -101,11 +101,11 @@ impl Literal {
 impl<T: Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Literal {
     fn parse(&self, input: &str, _definitions: &HashMap<T, Box<dyn Parsable<T>>>) -> Result<ParseTree<T>, String> {
         if input.len() < self.value.len() {
-            return Err(format!("Input '{}' is shorter than value '{}' to match", input, self.value));
+            return Result::Err(format!("Input '{}' is shorter than value '{}' to match", input, self.value));
         } else if &input[..self.value.len()] == self.value {
-            return Ok(ParseTree::new(&Default::default(), &self.value, &self.value, Vec::new(), false));
+            return Result::Ok(ParseTree::new(&Default::default(), &self.value, &self.value, Vec::new(), false));
         } else {
-            return Err(format!("Input '{}' does not match value '{}'", input, self.value));
+            return Result::Err(format!("Input '{}' does not match value '{}'", input, self.value));
         }
     }
 }
@@ -125,17 +125,17 @@ impl<T: Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Nonterm
         match definitions.get(&self.name) {
             Some(parsable) => {
                 match parsable.parse(input, definitions) {
-                    Ok(tree) => {
+                    Result::Ok(tree) => {
                         if tree.is_nonterminal {
-                            return Ok(ParseTree::new(&self.name, &tree.contents, &tree.all_contents, vec![tree.clone()], true)); 
+                            return Result::Ok(ParseTree::new(&self.name, &tree.contents, &tree.all_contents, vec![tree.clone()], true)); 
                         } else {
-                            return Ok(ParseTree::new(&self.name, &tree.contents, &tree.all_contents, tree.children, true));
+                            return Result::Ok(ParseTree::new(&self.name, &tree.contents, &tree.all_contents, tree.children, true));
                         }
                     },
-                    Err(msg) => return Err(msg),
+                    Result::Err(msg) => return Result::Err(msg),
                 }
             },
-            None => return Err(format!("Nonterminal '{:?}' has no matching definition", self.name)),
+            None => return Result::Err(format!("Nonterminal '{:?}' has no matching definition", self.name)),
         }
     }
 }
@@ -164,7 +164,7 @@ impl<T: Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Repetit
         let mut count = 0;
         while match self.max { Some(max) => count < max, None => true } {
             match self.parsable.parse(&input[offset..], definitions) {
-                Ok(tree) => {
+                Result::Ok(tree) => {
                     offset += tree.all_contents.len();
                     contents.push_str(&tree.contents);
                     if tree.is_nonterminal {
@@ -174,16 +174,16 @@ impl<T: Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Repetit
                     }
                     count += 1;
                 },
-                Err(_) => {
+                Result::Err(_) => {
                     if match self.min { Some(min) => count >= min, None => true } {
-                        return Ok(ParseTree::new(&Default::default(), &contents, &input[..offset], children, false));
+                        return Result::Ok(ParseTree::new(&Default::default(), &contents, &input[..offset], children, false));
                     } else {
-                        return Err(format!("Expected at least {} matches in '{}' but only had {}", self.min.unwrap(), input, count));
+                        return Result::Err(format!("Expected at least {} matches in '{}' but only had {}", self.min.unwrap(), input, count));
                     }
                 }
             }
         }
-        return Ok(ParseTree::new(&Default::default(), &contents, &input[..offset], children, false));
+        return Result::Ok(ParseTree::new(&Default::default(), &contents, &input[..offset], children, false));
     }
 }
 
@@ -202,8 +202,8 @@ impl<T: Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Skip<T>
         let mut offset = 0;
         loop {
             match self.parsable.parse(&input[offset..], definitions) {
-                Ok(tree) => offset += tree.all_contents.len(),
-                Err(_) => return Ok(ParseTree::new(&Default::default(), "", &input[..offset], Vec::new(), false)),
+                Result::Ok(tree) => offset += tree.all_contents.len(),
+                Result::Err(_) => return Result::Ok(ParseTree::new(&Default::default(), "", &input[..offset], Vec::new(), false)),
             }
         }
     }
