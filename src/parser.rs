@@ -3,7 +3,7 @@ use std::hash::Hash;
 use std::fmt::Debug;
 
 #[derive(Clone, Debug)]
-pub struct ParseTree<T: Sync + Clone + Debug + Default + Hash + PartialEq + Eq> {
+pub struct ParseTree<T> {
     pub name: T,
     pub contents: String,
     all_contents: String,
@@ -11,7 +11,7 @@ pub struct ParseTree<T: Sync + Clone + Debug + Default + Hash + PartialEq + Eq> 
     is_nonterminal: bool,
 }
 
-impl<T: Sync + Clone + Debug + Default + Hash + PartialEq + Eq> ParseTree<T> {
+impl<T: Clone> ParseTree<T> {
     pub fn new(name: &T, contents: &str, all_contents: &str, children: Vec<ParseTree<T>>, is_nonterminal: bool) -> Self {
         return ParseTree {
             name: name.clone(),
@@ -23,7 +23,7 @@ impl<T: Sync + Clone + Debug + Default + Hash + PartialEq + Eq> ParseTree<T> {
     }
 }
 
-pub trait Parsable<T: Sync + Clone + Debug + Default + Hash + PartialEq + Eq> {
+pub trait Parsable<T> {
     fn parse(&self, input: &str, definitions: &HashMap<T, Box<dyn Parsable<T> + Sync>>) -> Result<ParseTree<T>, String>;
 }
 
@@ -37,7 +37,7 @@ impl<T> Alternation<T> {
     }
 }
 
-impl<T: Sync + Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Alternation<T> {
+impl<T: Clone + Default> Parsable<T> for Alternation<T> {
     fn parse(&self, input: &str, definitions: &HashMap<T, Box<dyn Parsable<T> + Sync>>) -> Result<ParseTree<T>, String> {
         for parsable in &self.parsables {
             match parsable.parse(input, definitions) {
@@ -65,7 +65,7 @@ impl<T> Concatenation<T> {
     }
 }
 
-impl<T: Sync + Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Concatenation<T> {
+impl<T: Clone + Default> Parsable<T> for Concatenation<T> {
     fn parse(&self, input: &str, definitions: &HashMap<T, Box<dyn Parsable<T> + Sync>>) -> Result<ParseTree<T>, String> {
         let mut offset = 0;
         let mut contents = String::new();
@@ -98,7 +98,7 @@ impl Literal {
     }
 }
 
-impl<T: Sync + Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Literal {
+impl<T: Clone + Default> Parsable<T> for Literal {
     fn parse(&self, input: &str, _definitions: &HashMap<T, Box<dyn Parsable<T> + Sync>>) -> Result<ParseTree<T>, String> {
         if input.len() < self.value.len() {
             return Result::Err(format!("Input '{}' is shorter than value '{}' to match", input, self.value));
@@ -120,7 +120,7 @@ impl<T> Nonterminal<T> {
     }
 }
 
-impl<T: Sync + Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Nonterminal<T> {
+impl<T: Debug + Clone + Hash + PartialEq + Eq> Parsable<T> for Nonterminal<T> {
     fn parse(&self, input: &str, definitions: &HashMap<T, Box<dyn Parsable<T> + Sync>>) -> Result<ParseTree<T>, String> {
         match definitions.get(&self.name) {
             Some(parsable) => {
