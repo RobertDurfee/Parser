@@ -142,11 +142,17 @@ impl<T: Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Nonterm
 
 pub struct Repetition<T> {
     parsable: Box<dyn Parsable<T>>,
+    min: Option<u32>,
+    max: Option<u32>,
 }
 
 impl<T> Repetition<T> {
-    pub fn new(parsable: Box<dyn Parsable<T>>) -> Self {
-        return Repetition { parsable };
+    pub fn new(parsable: Box<dyn Parsable<T>>, min: Option<u32>, max: Option<u32>) -> Self {
+        return Repetition { 
+            parsable,
+            min,
+            max,
+        };
     }
 }
 
@@ -155,7 +161,8 @@ impl<T: Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Repetit
         let mut offset = 0;
         let mut contents = String::new();
         let mut children = Vec::new();
-        loop {
+        let mut count = 0;
+        while match self.max { Some(max) => count < max, None => true } {
             match self.parsable.parse(&input[offset..], definitions) {
                 Ok(tree) => {
                     offset += tree.all_contents.len();
@@ -165,10 +172,18 @@ impl<T: Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for Repetit
                     } else {
                         children.extend(tree.children);
                     }
+                    count += 1;
                 },
-                Err(_) => return Ok(ParseTree::new(&Default::default(), &contents, &input[..offset], children, false)),
+                Err(_) => {
+                    if match self.min { Some(min) => count >= min, None => true } {
+                        return Ok(ParseTree::new(&Default::default(), &contents, &input[..offset], children, false));
+                    } else {
+                        return Err(format!("Expected at least {} matches in '{}' but only had {}", self.min.unwrap(), input, count));
+                    }
+                }
             }
         }
+        return Ok(ParseTree::new(&Default::default(), &contents, &input[..offset], children, false));
     }
 }
 
@@ -236,8 +251,8 @@ macro_rules! nt {
 
 #[macro_export]
 macro_rules! rep {
-    ($x:expr) => {{
-        let ret: Box<dyn parser::Parsable<_>> = Box::new(parser::Repetition::new($x));
+    ($x:expr, $y:expr, $z:expr) => {{
+        let ret: Box<dyn parser::Parsable<_>> = Box::new(parser::Repetition::new($x, $y, $z));
         ret
     }}
 }
