@@ -26,6 +26,7 @@ impl<T: Clone> ParseTree<T> {
 
 pub trait Parsable<T> {
     fn parse(&self, input: &str, definitions: &HashMap<T, Box<dyn Parsable<T> + Sync>>) -> Result<ParseTree<T>, String>;
+    fn debug(&self) -> String;
 }
 
 pub struct Alternation<T> {
@@ -54,6 +55,15 @@ impl<T: Clone + Default> Parsable<T> for Alternation<T> {
         }
         return Result::Err(format!("Input '{}' does not match any alternation", input));
     }
+    fn debug(&self) -> String {
+        let mut result = String::from("Alternation { [ ");
+        for parsable in &self.parsables {
+            result.push_str(&parsable.debug());
+            result.push_str(", ");
+        }
+        result.push_str("] }");
+        return result;
+    }
 }
 
 pub struct CharacterClass<T> {
@@ -80,6 +90,12 @@ impl <T: Clone + Default + 'static> CharacterClass<T> {
 impl<T> Parsable<T> for CharacterClass<T> {
     fn parse(&self, input: &str, definitions: &HashMap<T, Box<dyn Parsable<T> + Sync>>) -> Result<ParseTree<T>, String> {
         return self.parsable.parse(input, definitions);
+    }
+    fn debug(&self) -> String {
+        let mut result = String::from("CharacterClass { ");
+        result.push_str(&self.parsable.debug());
+        result.push_str(" }");
+        return result;
     }
 }
 
@@ -114,6 +130,15 @@ impl<T: Clone + Default> Parsable<T> for Concatenation<T> {
         }
         return Result::Ok(ParseTree::new(&Default::default(), &contents, &input[..offset], children, false));
     }
+    fn debug(&self) -> String {
+        let mut result = String::from("Concatenation { [ ");
+        for parsable in &self.parsables {
+            result.push_str(&parsable.debug());
+            result.push_str(", ");
+        }
+        result.push_str("] }");
+        return result;
+    }
 }
 
 pub struct Literal {
@@ -135,6 +160,12 @@ impl<T: Clone + Default> Parsable<T> for Literal {
         } else {
             return Result::Err(format!("Input '{}' does not match value '{}'", input, self.value));
         }
+    }
+    fn debug(&self) -> String {
+        let mut result = String::from("Literal { ");
+        result.push_str(&self.value);
+        result.push_str(" }");
+        return result;
     }
 }
 
@@ -165,6 +196,12 @@ impl<T: Debug + Clone + Hash + PartialEq + Eq> Parsable<T> for Nonterminal<T> {
             },
             None => return Result::Err(format!("Nonterminal '{:?}' has no matching definition", self.name)),
         }
+    }
+    fn debug(&self) -> String {
+        let mut result = String::from("Nonterminal { ");
+        result.push_str(&format!("{:?}", self.name));
+        result.push_str(" }");
+        return result;
     }
 }
 
@@ -213,6 +250,12 @@ impl<T: Sync + Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for 
         }
         return Result::Ok(ParseTree::new(&Default::default(), &contents, &input[..offset], children, false));
     }
+    fn debug(&self) -> String {
+        let mut result = String::from("Repetition { ");
+        result.push_str(&self.parsable.debug());
+        result.push_str(&format!(", {:?}, {:?} }}", self.min, self.max));
+        return result;
+    }
 }
 
 pub struct Skip<T> {
@@ -234,6 +277,12 @@ impl<T: Sync + Clone + Debug + Default + Hash + PartialEq + Eq> Parsable<T> for 
                 Result::Err(_) => return Result::Ok(ParseTree::new(&Default::default(), "", &input[..offset], Vec::new(), false)),
             }
         }
+    }
+    fn debug(&self) -> String {
+        let mut result = String::from("Skip { ");
+        result.push_str(&self.parsable.debug());
+        result.push_str(" }");
+        return result;
     }
 }
 

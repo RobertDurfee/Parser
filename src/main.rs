@@ -76,6 +76,7 @@ impl<T: Clone + Default + Debug + FromStr + Hash + PartialEq + Eq + Sync + 'stat
                                 Err(msg) => return Err(msg),
                             }
                         }
+                        println!("Skipblock");
                         return Ok(Grammar::SkipBlock(nonterminal, grammars));
                     },
                     Err(_) => return Err(format!("Unable to parse '{:?}'", tree.children.get(0).unwrap()))
@@ -168,7 +169,10 @@ impl<T: Clone + Default + Debug + FromStr + Hash + PartialEq + Eq + Sync + 'stat
                 }
             },
             Nonterminal::Terminal => Grammar::new(tree.children.get(0).unwrap()),
-            Nonterminal::QuotedString => Ok(Grammar::Literal(tree.contents.clone())),
+            Nonterminal::QuotedString => {
+                println!("Literal {}", tree.contents);
+                return Ok(Grammar::Literal(String::from(&tree.contents[1..tree.contents.len()-1])));
+            },
             Nonterminal::CharacterSet => Ok(Grammar::CharacterClass(tree.contents.clone())),
             Nonterminal::AnyCharacter => Ok(Grammar::CharacterClass(tree.contents.clone())),
             Nonterminal::CharacterClass => Ok(Grammar::CharacterClass(tree.contents.clone())),
@@ -190,10 +194,12 @@ impl<T: Clone + Default + Debug + FromStr + Hash + PartialEq + Eq + Sync + 'stat
                 }
                 return Ok(result);
             },
-            Grammar::SkipBlock(ref skip_nonterminal, ref grammars) => {
+            Grammar::SkipBlock(ref nonterminal, ref grammars) => {
+                println!("Skipblock");
                 let mut result = HashMap::new();
                 for grammar in grammars {
-                    match grammar.skip(skip_nonterminal).definitions() {
+                    println!("Skipblock");
+                    match grammar.skip(nonterminal).definitions() {
                         Ok(definitions) => {
                             result.extend(definitions);
                         },
@@ -255,14 +261,43 @@ impl<T: Clone + Default + Debug + FromStr + Hash + PartialEq + Eq + Sync + 'stat
         }
     }
 
-    fn skip(&self, nonterminal: &T) -> Grammar<T> {
+    fn skip(&self, skip_nonterminal: &T) -> Grammar<T> {
         match *self {
-            Grammar::Nonterminal(_) |
-            Grammar::Literal(_) |
-            Grammar::CharacterClass(_) => {
-                return Grammar::Concatenation(vec![Box::new(Grammar::Skip(Box::new(Grammar::Nonterminal(nonterminal.clone())))), Box::new(self.clone()), Box::new(Grammar::Skip(Box::new(Grammar::Nonterminal(nonterminal.clone()))))]);
+            Grammar::Root(ref grammars) => {
+                let mut skipped = Vec::new();
+                for grammar in grammars {
+                    skipped.push(Box::new(grammar.skip(skip_nonterminal)));
+                }
+                return Grammar::Root(skipped);
             },
-            _ => return self.clone(),
+            Grammar::SkipBlock(ref nonterminal, ref grammars) => {
+                let mut skipped = Vec::new();
+                for grammar in grammars {
+                    skipped.push(Box::new(grammar.skip(skip_nonterminal)));
+                }
+                return Grammar::SkipBlock(nonterminal.clone(), skipped);
+            },
+            Grammar::Production(ref nonterminal, ref grammar) => return Grammar::Production(nonterminal.clone(), Box::new(grammar.skip(skip_nonterminal))),
+            Grammar::Alternation(ref grammars) => {
+                let mut skipped = Vec::new();
+                for grammar in grammars {
+                    skipped.push(Box::new(grammar.skip(skip_nonterminal)));
+                }
+                return Grammar::Alternation(skipped);
+            },
+            Grammar::Concatenation(ref grammars) => {
+                let mut skipped = Vec::new();
+                for grammar in grammars {
+                    skipped.push(Box::new(grammar.skip(skip_nonterminal)));
+                }
+                return Grammar::Concatenation(skipped);
+            },
+            Grammar::Repetition(ref grammar, ref min, ref max) => return Grammar::Repetition(Box::new(grammar.skip(skip_nonterminal)), min.clone(), max.clone()),
+            Grammar::Skip(ref grammar) => return Grammar::Skip(Box::new(grammar.skip(skip_nonterminal))),
+            Grammar::Nonterminal(_) | Grammar::Literal(_) | Grammar::CharacterClass(_) => {
+                println!("Skipped");
+                return Grammar::Concatenation(vec![Box::new(Grammar::Skip(Box::new(Grammar::Nonterminal(skip_nonterminal.clone())))), Box::new(self.clone()), Box::new(Grammar::Skip(Box::new(Grammar::Nonterminal(skip_nonterminal.clone()))))]);
+            },
         }
     }
 }
@@ -270,9 +305,17 @@ impl<T: Clone + Default + Debug + FromStr + Hash + PartialEq + Eq + Sync + 'stat
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 enum MyNonterminal {
     Expression,
-    Sum,
-    Primary,
+    GlueRight,
+    LowerOverlay,
+    UpperOverlay,
+    Resize,
+    Primitive,
+    GlueBelowOperator,
+    Filename,
+    CaptionSurround,
+    Caption,
     Number,
+    Question,
     Whitespace,
     Unknown,
 }
@@ -287,9 +330,17 @@ impl FromStr for MyNonterminal {
     fn from_str(my_nonterminal: &str) -> Result<Self, Self::Err> {
         match my_nonterminal {
             "expression" => Ok(MyNonterminal::Expression),
-            "sum" => Ok(MyNonterminal::Sum),
-            "primary" => Ok(MyNonterminal::Primary),
+            "glueright" => Ok(MyNonterminal::GlueRight),
+            "loweroverlay" => Ok(MyNonterminal::LowerOverlay),
+            "upperoverlay" => Ok(MyNonterminal::UpperOverlay),
+            "resize" => Ok(MyNonterminal::Resize),
+            "primitive" => Ok(MyNonterminal::Primitive),
+            "gluebelowoperator" => Ok(MyNonterminal::GlueBelowOperator),
+            "filename" => Ok(MyNonterminal::Filename),
+            "captionsurround" => Ok(MyNonterminal::CaptionSurround),
+            "caption" => Ok(MyNonterminal::Caption),
             "number" => Ok(MyNonterminal::Number),
+            "question" => Ok(MyNonterminal::Question),
             "whitespace" => Ok(MyNonterminal::Whitespace),
             _ => Err(format!("'{}' is not a valid MyNonterminal", my_nonterminal)),
         }
@@ -489,12 +540,20 @@ fn main() {
     ];
     let grammar = r#"
         @skip whitespace {
-            expression ::= sum;
-            sum ::= primary ('+' primary)*;
-            primary ::= number | '(' sum ')';
+            expression ::= glueright (gluebelowoperator glueright)*;
+            glueright ::= loweroverlay ('|' loweroverlay)*;
+            loweroverlay ::= upperoverlay ('_' upperoverlay)*;
+            upperoverlay ::= resize ('^' resize)*;
+            resize ::= primitive ('@' (number | question) 'x' (number | question))*;
+            primitive ::= filename | captionsurround | '(' expression ')';
         }
-        whitespace ::= [ \t\r\n]+;
+        gluebelowoperator ::= '---' '-'*;
+        filename ::= [A-Za-z0-9./][A-Za-z0-9./_-]*;
+        captionsurround ::= '"' caption '"';
+        caption ::= [^\n"]*;
         number ::= [0-9]+;
+        question ::= '?';
+        whitespace ::= [ \t\r\n]+;
     "#;
     match nt!(Nonterminal::Root).parse(grammar, &definitions) {
         Ok(tree) => {
@@ -504,7 +563,10 @@ fn main() {
                 Ok(ast) => {
                     match ast.definitions() {
                         Ok(definitions) => {
-                            match nt!(MyNonterminal::Expression).parse("(1+2)", &definitions) {
+                            for (nonterminal, definition) in &definitions {
+                                println!("{:?} => {:?}", nonterminal, definition.debug());
+                            }
+                            match nt!(MyNonterminal::Expression).parse("filename1.png -------- \"this is ' a test\" @?x34", &definitions) {
                                 Ok(tree) => println!("{:#?}", tree),
                                 Err(msg) => println!("{}", msg),
                             }
