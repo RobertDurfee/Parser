@@ -294,6 +294,30 @@ macro_rules! rep {
 }
 
 #[macro_export]
+macro_rules! star {
+    ($x:expr) => {{
+        let ret: Box<dyn crate::parser::Parsable<_> + Sync> = Box::new(crate::parser::Repetition::new($x, Some(0), None));
+        ret
+    }}
+}
+
+#[macro_export]
+macro_rules! plus {
+    ($x:expr) => {{
+        let ret: Box<dyn crate::parser::Parsable<_> + Sync> = Box::new(crate::parser::Repetition::new($x, Some(1), None));
+        ret
+    }}
+}
+
+#[macro_export]
+macro_rules! qm {
+    ($x:expr) => {{
+        let ret: Box<dyn crate::parser::Parsable<_> + Sync> = Box::new(crate::parser::Repetition::new($x, Some(0), Some(1)));
+        ret
+    }}
+}
+
+#[macro_export]
 macro_rules! skp {
     ($x:expr) => {{
         let ret: Box<dyn crate::parser::Parsable<_> + Sync> = Box::new(crate::parser::Skip::new($x));
