@@ -2,12 +2,10 @@
 extern crate lazy_static;
 
 mod parser;
-mod parser2;
 mod util;
-mod char_class;
+mod character_class;
 mod grammar;
 
-use std::fmt::Debug;
 use std::hash::Hash;
 use std::str::FromStr;
 
@@ -26,11 +24,6 @@ enum Nonterminal {
     Number,
     Question,
     Whitespace,
-    Unknown,
-}
-
-impl Default for Nonterminal {
-    fn default() -> Self { Nonterminal::Unknown }
 }
 
 impl FromStr for Nonterminal {
@@ -51,12 +44,12 @@ impl FromStr for Nonterminal {
             "number" => Ok(Nonterminal::Number),
             "question" => Ok(Nonterminal::Question),
             "whitespace" => Ok(Nonterminal::Whitespace),
-            _ => Err(format!("'{}' is not a valid Nonterminal", my_nonterminal)),
+            any => Err(format!("'{:?}' is not a valid Nonterminal", any)),
         }
     }
 }
 
-fn main() {
+fn main() -> Result<(), String> {
     let grammar = r#"
         @skip whitespace {
             expression ::= glueright (gluebelowoperator glueright)*;
@@ -74,13 +67,6 @@ fn main() {
         question ::= '?';
         whitespace ::= [ \t\r\n]+;
     "#;
-    match grammar::definitions(grammar) {
-        Ok(definitions) => {
-            match nt!(Nonterminal::Expression).parse("filename1.png -------- \"this is ' a test\" @?x34", &definitions) {
-                Ok(tree) => println!("{:#?}", tree),
-                Err(msg) => println!("{}", msg),
-            }
-        }
-        Err(msg) => println!("Err def {}", msg),
-    }
+    println!("{:#?}", parser::parse("filename1.png ------ \"this is a test\" @?x34", &grammar::definitions(grammar)?, Nonterminal::Expression)?);
+    return Ok(());
 }

@@ -2,9 +2,8 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::hash::Hash;
 use std::fmt::Debug;
-use crate::parser::{ParseTree, Parsable};
 use crate::parser;
-use crate::{hashmap, cat, lit, star, plus, nt, alt, chc, skp, qm};
+use crate::{hashmap, cat, lit, star, plus, nt, alt, chc, skp, qm, rep};
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 enum Nonterminal {
@@ -27,11 +26,6 @@ enum Nonterminal {
     AnyCharacter,
     CharacterClass,
     Whitespace,
-    Unknown,
-}
-
-impl Default for Nonterminal {
-    fn default() -> Self { Nonterminal::Unknown }
 }
 
 #[derive(Debug, Clone)]
@@ -48,204 +42,150 @@ enum Grammar<T> {
     CharacterClass(String),
 }
 
-impl<T: Clone + Debug + Default + FromStr + Hash + PartialEq + Eq + Sync + 'static> Grammar<T> {
-    fn new(tree: &ParseTree<Nonterminal>) -> Result<Grammar<T>, String> {
+impl<T: Clone + Debug + FromStr + Hash + PartialEq + Eq + Sync + 'static> Grammar<T> {
+    fn new(tree: &parser::Tree<Nonterminal>) -> Result<Grammar<T>, String> {
         match tree.name {
-            Nonterminal::Root => {
+            Some(Nonterminal::Root) => {
                 let mut grammars = Vec::new();
                 for child in &tree.children {
-                    match Grammar::new(&child) {
-                        Ok(grammar) => grammars.push(Box::new(grammar)),
-                        Err(msg) => return Err(msg),
-                    }
+                    grammars.push(Box::new(Grammar::new(&child)?));
                 }
                 return Ok(Grammar::Root(grammars));
             },
-            Nonterminal::SkipBlock => {
-                match T::from_str(&tree.children.get(0).unwrap().contents) {
+            Some(Nonterminal::SkipBlock) => {
+                match T::from_str(&tree.children.get(0).unwrap().contents()) {
                     Ok(nonterminal) => {
                         let mut grammars = Vec::new();
                         for child in &tree.children[1..] {
-                            match Grammar::new(&child) {
-                                Ok(grammar) => grammars.push(Box::new(grammar)),
-                                Err(msg) => return Err(msg),
-                            }
+                            grammars.push(Box::new(Grammar::new(&child)?));
                         }
                         return Ok(Grammar::SkipBlock(nonterminal, grammars));
                     },
                     Err(_) => return Err(format!("Unable to parse '{:?}'", tree.children.get(0).unwrap()))
                 }
             },
-            Nonterminal::Production => {
-                match T::from_str(&tree.children.get(0).unwrap().contents) {
-                    Ok(nonterminal) => {
-                        match Grammar::new(tree.children.get(1).unwrap()) {
-                            Ok(grammar) => return Ok(Grammar::Production(nonterminal, Box::new(grammar))),
-                            Err(msg) => return Err(msg),
-                        }
-                    },
+            Some(Nonterminal::Production) => {
+                match T::from_str(&tree.children.get(0).unwrap().contents()) {
+                    Ok(nonterminal) => return Ok(Grammar::Production(nonterminal, Box::new(Grammar::new(tree.children.get(1).unwrap())?))),
                     Err(_) => return Err(format!("Unable to parse '{:?}'", tree.children.get(0).unwrap()))
                 }
             },
-            Nonterminal::Alternation => {
+            Some(Nonterminal::Alternation) => {
                 if tree.children.len() > 1 {
                     let mut grammars = Vec::new();
                     for child in &tree.children {
-                        match Grammar::new(&child) {
-                            Ok(grammar) => grammars.push(Box::new(grammar)),
-                            Err(msg) => return Err(msg),
-                        }
+                        grammars.push(Box::new(Grammar::new(&child)?));
                     }
                     return Ok(Grammar::Alternation(grammars));
                 } else {
                     return Grammar::new(tree.children.get(0).unwrap());
                 }
             },
-            Nonterminal::Concatenation => {
+            Some(Nonterminal::Concatenation) => {
                 if tree.children.len() > 1 {
                     let mut grammars = Vec::new();
                     for child in &tree.children {
-                        match Grammar::new(&child) {
-                            Ok(grammar) => grammars.push(Box::new(grammar)),
-                            Err(msg) => return Err(msg),
-                        }
+                        grammars.push(Box::new(Grammar::new(&child)?));
                     }
                     return Ok(Grammar::Concatenation(grammars));
                 } else {
                     return Grammar::new(tree.children.get(0).unwrap());
                 }
             },
-            Nonterminal::Repetition => {
-                match Grammar::new(tree.children.get(0).unwrap()) {
-                    Ok(grammar) => {
-                        if let Some(operator) = tree.children.get(1) {
-                            if let Some(bound) = operator.children.get(0) {
-                                match bound.name {
-                                    Nonterminal::Number => {
-                                        let bound = bound.contents.parse::<u32>().unwrap();
-                                        return Ok(Grammar::Repetition(Box::new(grammar), Some(bound), Some(bound)));
-                                    },
-                                    Nonterminal::Range => {
-                                        let lower_bound = bound.children.get(0).unwrap().contents.parse::<u32>().unwrap();
-                                        let upper_bound = bound.children.get(1).unwrap().contents.parse::<u32>().unwrap();
-                                        return Ok(Grammar::Repetition(Box::new(grammar), Some(lower_bound), Some(upper_bound)));
-                                    },
-                                    Nonterminal::LowerBound => {
-                                        let lower_bound = bound.children.get(0).unwrap().contents.parse::<u32>().unwrap();
-                                        return Ok(Grammar::Repetition(Box::new(grammar), Some(lower_bound), None));
-                                    },
-                                    Nonterminal::UpperBound => {
-                                        let upper_bound = bound.children.get(0).unwrap().contents.parse::<u32>().unwrap();
-                                        return Ok(Grammar::Repetition(Box::new(grammar), None, Some(upper_bound)));
-                                    },
-                                    _ => return Err(format!("Invalid repetition bound '{:?}'", bound.name)),
-                                }
-                            } else {
-                                match operator.contents.as_str() {
-                                    "?" => return Ok(Grammar::Repetition(Box::new(grammar), Some(0), Some(1))),
-                                    "*" => return Ok(Grammar::Repetition(Box::new(grammar), Some(0), None)),
-                                    "+" => return Ok(Grammar::Repetition(Box::new(grammar), Some(1), None)),
-                                    _ => return Err(format!("Invalid repetition operator '{}'", operator.contents)),
-                                }
-                            }
-                        } else {
-                            return Ok(grammar);
+            Some(Nonterminal::Repetition) => {
+                let grammar = Grammar::new(tree.children.get(0).unwrap())?;
+                if let Some(operator) = tree.children.get(1) {
+                    if let Some(bound) = operator.children.get(0) {
+                        match bound.name {
+                            Some(Nonterminal::Number) => {
+                                let bound = bound.contents().parse::<u32>().unwrap();
+                                return Ok(Grammar::Repetition(Box::new(grammar), Some(bound), Some(bound)));
+                            },
+                            Some(Nonterminal::Range) => {
+                                let lower_bound = bound.children.get(0).unwrap().contents().parse::<u32>().unwrap();
+                                let upper_bound = bound.children.get(1).unwrap().contents().parse::<u32>().unwrap();
+                                return Ok(Grammar::Repetition(Box::new(grammar), Some(lower_bound), Some(upper_bound)));
+                            },
+                            Some(Nonterminal::LowerBound) => {
+                                let lower_bound = bound.children.get(0).unwrap().contents().parse::<u32>().unwrap();
+                                return Ok(Grammar::Repetition(Box::new(grammar), Some(lower_bound), None));
+                            },
+                            Some(Nonterminal::UpperBound) => {
+                                let upper_bound = bound.children.get(0).unwrap().contents().parse::<u32>().unwrap();
+                                return Ok(Grammar::Repetition(Box::new(grammar), None, Some(upper_bound)));
+                            },
+                            _ => return Err(format!("Invalid repetition bound '{:?}'", bound.name)),
                         }
-                    },
-                    Err(msg) => return Err(msg),
+                    } else {
+                        match operator.contents().as_str() {
+                            "?" => return Ok(Grammar::Repetition(Box::new(grammar), Some(0), Some(1))),
+                            "*" => return Ok(Grammar::Repetition(Box::new(grammar), Some(0), None)),
+                            "+" => return Ok(Grammar::Repetition(Box::new(grammar), Some(1), None)),
+                            any => return Err(format!("Invalid repetition operator '{:?}'", any)),
+                        }
+                    }
+                } else {
+                    return Ok(grammar);
                 }
             },
-            Nonterminal::Unit => Grammar::new(tree.children.get(0).unwrap()),
-            Nonterminal::Nonterminal => {
-                match T::from_str(&tree.contents) {
+            Some(Nonterminal::Unit) => Grammar::new(tree.children.get(0).unwrap()),
+            Some(Nonterminal::Nonterminal) => {
+                match T::from_str(&tree.contents()) {
                     Ok(nonterminal) => Ok(Grammar::Nonterminal(nonterminal)),
-                    Err(_) => Err(format!("Unable to parse '{:?}'", tree.contents)),
+                    Err(_) => Err(format!("Unable to parse '{:?}'", tree.contents())),
                 }
             },
-            Nonterminal::Terminal => Grammar::new(tree.children.get(0).unwrap()),
-            Nonterminal::QuotedString => Ok(Grammar::Literal(String::from(&tree.contents[1..tree.contents.len()-1]))),
-            Nonterminal::CharacterSet => Ok(Grammar::CharacterClass(tree.contents.clone())),
-            Nonterminal::AnyCharacter => Ok(Grammar::CharacterClass(tree.contents.clone())),
-            Nonterminal::CharacterClass => Ok(Grammar::CharacterClass(tree.contents.clone())),
-            _ => Err(format!("'{:?}' is not valid nonterminal", tree.name)),
+            Some(Nonterminal::Terminal) => Grammar::new(tree.children.get(0).unwrap()),
+            Some(Nonterminal::QuotedString) => Ok(Grammar::Literal(String::from(&tree.contents()[1..tree.contents().len()-1]))),
+            Some(Nonterminal::CharacterSet) => Ok(Grammar::CharacterClass(tree.contents())),
+            Some(Nonterminal::AnyCharacter) => Ok(Grammar::CharacterClass(tree.contents())),
+            Some(Nonterminal::CharacterClass) => Ok(Grammar::CharacterClass(tree.contents())),
+            ref any => Err(format!("'{:?}' is not valid nonterminal", any)),
         }
     }
 
-    fn definitions(&self) -> Result<HashMap<T, Box<dyn Parsable<T> + Sync>>, String> {
+    fn definitions(&self) -> Result<HashMap<T, Box<parser::Term<T>>>, String> {
         match *self {
             Grammar::Root(ref grammars) => {
                 let mut result = HashMap::new();
                 for grammar in grammars {
-                    match grammar.definitions() {
-                        Ok(definitions) => {
-                            result.extend(definitions);
-                        },
-                        Err(msg) => return Err(msg),
-                    }
+                    result.extend(grammar.definitions()?);
                 }
                 return Ok(result);
             },
             Grammar::SkipBlock(ref nonterminal, ref grammars) => {
                 let mut result = HashMap::new();
                 for grammar in grammars {
-                    match grammar.skip(nonterminal).definitions() {
-                        Ok(definitions) => {
-                            result.extend(definitions);
-                        },
-                        Err(msg) => return Err(msg),
-                    }
+                    result.extend(grammar.skip(nonterminal).definitions()?);
                 }
                 return Ok(result);
             },
-            Grammar::Production(ref nonterminal, ref grammar) => {
-                match grammar.definition() {
-                    Ok(definition) => {
-                        return Ok(hashmap![nonterminal.clone() => definition]);
-                    },
-                    Err(msg) => return Err(msg),
-                }
-            },
-            _ => Err(format!("Cannot get definitions for {:?}", *self)),
+            Grammar::Production(ref nonterminal, ref grammar) => Ok(hashmap![nonterminal.clone() => grammar.definition()?]),
+            _ => Err(format!("Cannot get definitions for '{:?}'", *self)),
         }
     }
 
-    fn definition(&self) -> Result<Box<dyn Parsable<T> + Sync>, String> {
+    fn definition(&self) -> Result<Box<parser::Term<T>>, String> {
         match *self {
             Grammar::Alternation(ref grammars) => {
                 let mut definitions = Vec::new();
                 for grammar in grammars {
-                    match grammar.definition() {
-                        Ok(definition) => definitions.push(definition),
-                        Err(msg) => return Err(msg),
-                    }
+                    definitions.push(grammar.definition()?);
                 }
-                return Ok(Box::new(parser::Alternation::new(definitions)));
+                return Ok(Box::new(parser::Term::Alternation(definitions)));
             },
             Grammar::Concatenation(ref grammars) => {
                 let mut definitions = Vec::new();
                 for grammar in grammars {
-                    match grammar.definition() {
-                        Ok(definition) => definitions.push(definition),
-                        Err(msg) => return Err(msg),
-                    }
+                    definitions.push(grammar.definition()?);
                 }
-                return Ok(Box::new(parser::Concatenation::new(definitions)));
+                return Ok(Box::new(parser::Term::Concatenation(definitions)));
             },
-            Grammar::Repetition(ref grammar, ref min, ref max) => {
-                match grammar.definition() {
-                    Ok(definition) => Ok(Box::new(parser::Repetition::new(definition, *min, *max))),
-                    Err(msg) => Err(msg),
-                }
-            },
-            Grammar::Skip(ref grammar) => {
-                match grammar.definition() {
-                    Ok(definition) => Ok(Box::new(parser::Skip::new(definition))),
-                    Err(msg) => Err(msg),
-                }
-            },
-            Grammar::Nonterminal(ref nonterminal) => Ok(Box::new(parser::Nonterminal::new(nonterminal.clone()))),
-            Grammar::Literal(ref literal) => Ok(Box::new(parser::Literal::new(&literal))),
-            Grammar::CharacterClass(ref character_class) => Ok(Box::new(parser::CharacterClass::new(&character_class))),
+            Grammar::Repetition(ref grammar, ref min, ref max) => Ok(rep!(grammar.definition()?, *min, *max)),
+            Grammar::Skip(ref grammar) => Ok(skp!(grammar.definition()?)),
+            Grammar::Nonterminal(ref nonterminal) => Ok(nt!(nonterminal.clone())),
+            Grammar::Literal(ref literal) => Ok(lit!(literal)),
+            Grammar::CharacterClass(ref character_class) => Ok(chc!(&character_class)),
             _ => Err(format!("Cannot get definition for {:?}", *self)),
         }
     }
@@ -283,7 +223,12 @@ impl<T: Clone + Debug + Default + FromStr + Hash + PartialEq + Eq + Sync + 'stat
             },
             Grammar::Repetition(ref grammar, ref min, ref max) => return Grammar::Repetition(Box::new(grammar.skip(skip_nonterminal)), min.clone(), max.clone()),
             Grammar::Skip(ref grammar) => return Grammar::Skip(Box::new(grammar.skip(skip_nonterminal))),
-            Grammar::Nonterminal(_) | Grammar::Literal(_) | Grammar::CharacterClass(_) => return Grammar::Concatenation(vec![Box::new(Grammar::Skip(Box::new(Grammar::Nonterminal(skip_nonterminal.clone())))), Box::new(self.clone()), Box::new(Grammar::Skip(Box::new(Grammar::Nonterminal(skip_nonterminal.clone()))))]),
+            Grammar::Nonterminal(_) | Grammar::Literal(_) | Grammar::CharacterClass(_) => {
+                return Grammar::Concatenation(vec![
+                    Box::new(Grammar::Skip(Box::new(Grammar::Nonterminal(skip_nonterminal.clone())))), 
+                    Box::new(self.clone()),
+                    Box::new(Grammar::Skip(Box::new(Grammar::Nonterminal(skip_nonterminal.clone()))))])
+            },
         }
     }
 }
@@ -310,7 +255,7 @@ lazy_static! {
     // anycharacter ::= '.';
     // characterclass ::= '\\' [DSWdsw];
     // whitespace ::= [ \t\r\n];
-    static ref DEFINITIONS: HashMap<Nonterminal, Box<dyn Parsable<Nonterminal> + Sync>> = hashmap![
+    static ref DEFINITIONS: HashMap<Nonterminal, Box<parser::Term<Nonterminal>>> = hashmap![
         Nonterminal::Root => plus!(
             alt!(
                 cat!(
@@ -481,14 +426,6 @@ lazy_static! {
     ];
 }
 
-pub fn definitions<T: Clone + Debug + Default + Eq + FromStr + Hash + Sync + 'static>(input: &str) -> Result<HashMap<T, Box<dyn Parsable<T> + Sync>>, String> {
-    match nt!(Nonterminal::Root).parse(input, &DEFINITIONS) {
-        Ok(tree) => {
-            match Grammar::new(&tree) {
-                Ok(ast) => ast.definitions(),
-                Err(msg) => Err(msg),
-            }
-        },
-        Err(msg) => Err(msg),
-    }
+pub fn definitions<T: Clone + Debug + Eq + FromStr + Hash + Sync + 'static>(input: &str) -> Result<HashMap<T, Box<parser::Term<T>>>, String> {
+    return Grammar::new(&parser::parse(input, &DEFINITIONS, Nonterminal::Root)?)?.definitions();
 }

@@ -1,10 +1,8 @@
 use std::collections::{HashSet, HashMap};
-use std::iter::FromIterator;
 use std::char;
 
-use crate::parser::ParseTree;
-use crate::parser::Parsable;
-use crate::{hashmap, alt, cat, lit, nt, plus};
+use crate::parser;
+use crate::{hashmap, alt, nt, lit, cat, plus};
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 enum Nonterminal {
@@ -22,11 +20,6 @@ enum Nonterminal {
     NonDigit,
     Word,
     NonWord,
-    Unknown,
-}
-
-impl Default for Nonterminal {
-    fn default() -> Self { Nonterminal::Unknown }
 }
 
 enum CharacterClass {
@@ -58,41 +51,28 @@ impl CharacterClass {
         '2', '3', '4', '5', '6', '7', '8', '9', '_'
     ];
 
-    fn new(tree: &ParseTree<Nonterminal>) -> Result<CharacterClass, String> {
+    fn new(tree: &parser::Tree<Nonterminal>) -> Result<CharacterClass, String> {
         match tree.name {
-            Nonterminal::Root => return CharacterClass::new(tree.children.get(0).unwrap()),
-            Nonterminal::Longhand => return CharacterClass::new(tree.children.get(0).unwrap()),
-            Nonterminal::Negation => {
-                match CharacterClass::new(tree.children.get(0).unwrap()) {
-                    Ok(ast) => return Ok(CharacterClass::Negation(Box::new(ast))),
-                    Err(msg) => return Err(msg),
-                }
-            },
-            Nonterminal::Shorthand => return CharacterClass::new(tree.children.get(0).unwrap()),
-            Nonterminal::Union => {
+            Some(Nonterminal::Root) => return CharacterClass::new(tree.children.get(0).unwrap()),
+            Some(Nonterminal::Longhand) => return CharacterClass::new(tree.children.get(0).unwrap()),
+            Some(Nonterminal::Negation) => return Ok(CharacterClass::Negation(Box::new(CharacterClass::new(tree.children.get(0).unwrap())?))),
+            Some(Nonterminal::Shorthand) => return CharacterClass::new(tree.children.get(0).unwrap()),
+            Some(Nonterminal::Union) => {
                 let mut char_classes = Vec::new();
                 for child in &tree.children {
-                    match CharacterClass::new(&child) {
-                        Ok(ast) => char_classes.push(Box::new(ast)),
-                        Err(msg) => return Err(msg),
-                    }
+                    char_classes.push(Box::new(CharacterClass::new(&child)?));
                 }
                 return Ok(CharacterClass::Union(char_classes));
             }
-            Nonterminal::Range => {
-                match (CharacterClass::new(tree.children.get(0).unwrap()), CharacterClass::new(tree.children.get(1).unwrap())) {
-                    (Ok(left), Ok(right)) => return Ok(CharacterClass::Range(Box::new(left), Box::new(right))),
-                    _ => return Err(format!("Failed to make ast for children")),
-                }
-            },
-            Nonterminal::Single => return Ok(CharacterClass::Single(tree.contents.clone())),
-            Nonterminal::Any => return Ok(CharacterClass::Any),
-            Nonterminal::Whitespace => return Ok(CharacterClass::Whitespace),
-            Nonterminal::NonWhitespace => return Ok(CharacterClass::Negation(Box::new(CharacterClass::Whitespace))),
-            Nonterminal::Digit => return Ok(CharacterClass::Digit),
-            Nonterminal::NonDigit => return Ok(CharacterClass::Negation(Box::new(CharacterClass::Digit))),
-            Nonterminal::Word => return Ok(CharacterClass::Word),
-            Nonterminal::NonWord => return Ok(CharacterClass::Negation(Box::new(CharacterClass::Word))),
+            Some(Nonterminal::Range) => return Ok(CharacterClass::Range(Box::new(CharacterClass::new(tree.children.get(0).unwrap())?), Box::new(CharacterClass::new(tree.children.get(1).unwrap())?))),
+            Some(Nonterminal::Single) => return Ok(CharacterClass::Single(tree.contents())),
+            Some(Nonterminal::Any) => return Ok(CharacterClass::Any),
+            Some(Nonterminal::Whitespace) => return Ok(CharacterClass::Whitespace),
+            Some(Nonterminal::NonWhitespace) => return Ok(CharacterClass::Negation(Box::new(CharacterClass::Whitespace))),
+            Some(Nonterminal::Digit) => return Ok(CharacterClass::Digit),
+            Some(Nonterminal::NonDigit) => return Ok(CharacterClass::Negation(Box::new(CharacterClass::Digit))),
+            Some(Nonterminal::Word) => return Ok(CharacterClass::Word),
+            Some(Nonterminal::NonWord) => return Ok(CharacterClass::Negation(Box::new(CharacterClass::Word))),
             _ => return Err(format!("Unknown nonterminal '{:?}'", tree.name)),
         }
     }
@@ -100,22 +80,15 @@ impl CharacterClass {
     fn characters(&self) -> Result<Vec<char>, String> {
         match *self {
             CharacterClass::Negation(ref char_class) => {
-                let result: HashSet<char> = HashSet::from_iter(CharacterClass::ANY_CHARACTERS.iter().cloned());
-                match char_class.characters() {
-                    Ok(characters) => {
-                        let characters: HashSet<char> = HashSet::from_iter(characters.iter().cloned());
-                        return Ok(result.difference(&characters).cloned().collect());
-                    },
-                    Err(msg) => Err(msg),
-                }
+                let any_characters = CharacterClass::ANY_CHARACTERS.iter().cloned().collect::<HashSet<char>>();
+                let characters = char_class.characters()?.iter().cloned().collect();
+                let difference = any_characters.difference(&characters);
+                return Ok(difference.cloned().collect());
             },
             CharacterClass::Union(ref char_classes) => {
                 let mut result = Vec::new();
                 for char_class in char_classes {
-                    match char_class.characters() {
-                        Ok(characters) => result.extend(characters),
-                        Err(msg) => return Err(msg),
-                    }
+                    result.extend(char_class.characters()?);
                 }
                 return Ok(result);
             },
@@ -183,7 +156,7 @@ lazy_static! {
     // nondigit ::= '\D';
     // word ::= '\w';
     // nonword ::= '\W';
-    static ref DEFINITIONS: HashMap<Nonterminal, Box<dyn Parsable<Nonterminal> + Sync>> = hashmap![
+    static ref DEFINITIONS: HashMap<Nonterminal, Box<parser::Term<Nonterminal>>> = hashmap![
         Nonterminal::Root => alt!(
             nt!(Nonterminal::Longhand),
             nt!(Nonterminal::Negation),
@@ -247,13 +220,5 @@ lazy_static! {
 }
 
 pub fn characters(input: &str) -> Result<Vec<char>, String> {
-    match nt!(Nonterminal::Root).parse(input, &DEFINITIONS) {
-        Ok(tree) => {
-            match CharacterClass::new(&tree) {
-                Ok(ast) => ast.characters(),
-                Err(msg) => Err(msg),
-            }
-        },
-        Err(msg) => Err(msg),
-    }
+    return CharacterClass::new(&parser::parse(input, &DEFINITIONS, Nonterminal::Root)?)?.characters();
 }
