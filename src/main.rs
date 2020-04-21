@@ -2,6 +2,7 @@
 extern crate lazy_static;
 
 mod parser;
+mod parser2;
 mod util;
 mod char_class;
 mod grammar;
