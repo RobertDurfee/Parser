@@ -44,6 +44,9 @@ fn main() -> Result<(), String> {
         Question ::= '?';
         Whitespace ::= [ \t\r\n]+;
     "#;
-    println!("{:#?}", parser::parse("filename1.png ------ \"this is a test\" @?x34", &grammar::definitions(grammar)?, Nonterminal::Expression)?);
+    let expression = r#"
+        (filename1.png | filename2.png)@?x200
+    "#;
+    println!("{:#?}", parser::parse(expression, &grammar::definitions(grammar)?, Nonterminal::Expression)?);
     return Ok(());
 }
