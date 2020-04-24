@@ -65,7 +65,7 @@ impl CharacterClass {
                 return Ok(CharacterClass::Union(char_classes));
             }
             Some(Nonterminal::Range) => return Ok(CharacterClass::Range(Box::new(CharacterClass::new(tree.children.get(0).unwrap())?), Box::new(CharacterClass::new(tree.children.get(1).unwrap())?))),
-            Some(Nonterminal::Single) => return Ok(CharacterClass::Single(tree.contents())),
+            Some(Nonterminal::Single) => return Ok(CharacterClass::Single(tree.contents.clone())),
             Some(Nonterminal::Any) => return Ok(CharacterClass::Any),
             Some(Nonterminal::Whitespace) => return Ok(CharacterClass::Whitespace),
             Some(Nonterminal::NonWhitespace) => return Ok(CharacterClass::Negation(Box::new(CharacterClass::Whitespace))),

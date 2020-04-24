@@ -6,16 +6,10 @@ use std::fmt;
 use crate::character_class;
 
 #[derive(Clone, Debug)]
-pub struct Tree<'a, T> {
+pub struct Tree<T> {
     pub name: Option<T>,
-    contents: Vec<&'a str>,
-    pub children: Vec<Tree<'a, T>>,
-}
-
-impl<'a, T> Tree<'a, T> {
-    pub fn contents(&self) -> String {
-        return self.contents.join("");
-    }
+    pub contents: String,
+    pub children: Vec<Tree<T>>,
 }
 
 pub struct CharacterClass<T> {
@@ -47,7 +41,7 @@ pub enum Term<T> {
 }
 
 impl<'a, T: Clone + Debug + Eq + PartialEq + Hash> Term<T> {
-    fn parse(&self, input: &'a str, definitions: &HashMap<T, Box<Term<T>>>) -> Result<(Tree<'a, T>, usize, bool), String> {
+    fn parse(&self, input: &'a str, definitions: &HashMap<T, Box<Term<T>>>) -> Result<(Tree<T>, usize, bool), String> {
         match *self {
             Term::Alternation(ref terms) => {
                 for term in terms {
@@ -73,13 +67,13 @@ impl<'a, T: Clone + Debug + Eq + PartialEq + Hash> Term<T> {
                 return term.parse(input, definitions);
             },
             Term::Concatenation(ref terms) => {
-                let mut contents = Vec::new();
+                let mut contents = String::new();
                 let mut total_offset = 0;
                 let mut children = Vec::new();
                 for term in terms {
                     let (tree, offset, is_nonterminal) = term.parse(&input[total_offset..], definitions)?;
                     total_offset += offset;
-                    contents.extend(&tree.contents);
+                    contents.push_str(&tree.contents);
                     if is_nonterminal {
                         children.push(tree);
                     } else {
@@ -99,7 +93,7 @@ impl<'a, T: Clone + Debug + Eq + PartialEq + Hash> Term<T> {
                 if &input[..value.len()] == value {
                     return Ok((Tree {
                         name: None,
-                        contents: vec![&input[..value.len()]],
+                        contents: String::from(&input[..value.len()]),
                         children: Vec::new(),
                     }, value.len(), false));
                 } else {
@@ -129,7 +123,7 @@ impl<'a, T: Clone + Debug + Eq + PartialEq + Hash> Term<T> {
             },
             Term::Repetition(ref term, ref min, ref max) => {
                 let mut count = 0;
-                let mut contents = Vec::new();
+                let mut contents = String::new();
                 let mut total_offset = 0;
                 let mut children = Vec::new();
                 while match max { Some(max) => count < *max, None => true } {
@@ -137,7 +131,7 @@ impl<'a, T: Clone + Debug + Eq + PartialEq + Hash> Term<T> {
                         Ok((tree, offset, is_nonterminal)) => {
                             count += 1;
                             total_offset += offset;
-                            contents.extend(&tree.contents);
+                            contents.push_str(&tree.contents);
                             if is_nonterminal {
                                 children.push(tree);
                             } else {
@@ -173,7 +167,7 @@ impl<'a, T: Clone + Debug + Eq + PartialEq + Hash> Term<T> {
                         Err(_) => {
                             return Ok((Tree {
                                 name: None,
-                                contents: Vec::new(),
+                                contents: String::new(),
                                 children: Vec::new(),
                             }, total_offset, false));
                         },
@@ -226,7 +220,7 @@ impl<T: Debug> Debug for Term<T> {
     }
 }
 
-pub fn parse<'a, T: Clone + Debug + Eq + Hash + PartialEq>(input: &'a str, definitions: &HashMap<T, Box<Term<T>>>, root: T) -> Result<Tree<'a, T>, String> {
+pub fn parse<'a, T: Clone + Debug + Eq + Hash + PartialEq>(input: &'a str, definitions: &HashMap<T, Box<Term<T>>>, root: T) -> Result<Tree<T>, String> {
     let (tree, offset, _) = Term::Nonterminal(root).parse(input, definitions)?;
     if offset != input.len() {
         return Err(format!("Whole input '{:?}' not matched, only matched '{:?}'", input, &input[..offset]));

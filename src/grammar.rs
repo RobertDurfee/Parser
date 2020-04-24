@@ -53,7 +53,7 @@ impl<T: Clone + Debug + FromStr + Hash + PartialEq + Eq + Sync + 'static> Gramma
                 return Ok(Grammar::Root(grammars));
             },
             Some(Nonterminal::SkipBlock) => {
-                match T::from_str(&tree.children.get(0).unwrap().contents()) {
+                match T::from_str(&tree.children.get(0).unwrap().contents) {
                     Ok(nonterminal) => {
                         let mut grammars = Vec::new();
                         for child in &tree.children[1..] {
@@ -65,7 +65,7 @@ impl<T: Clone + Debug + FromStr + Hash + PartialEq + Eq + Sync + 'static> Gramma
                 }
             },
             Some(Nonterminal::Production) => {
-                match T::from_str(&tree.children.get(0).unwrap().contents()) {
+                match T::from_str(&tree.children.get(0).unwrap().contents) {
                     Ok(nonterminal) => return Ok(Grammar::Production(nonterminal, Box::new(Grammar::new(tree.children.get(1).unwrap())?))),
                     Err(_) => return Err(format!("Unable to parse '{:?}'", tree.children.get(0).unwrap()))
                 }
@@ -98,26 +98,26 @@ impl<T: Clone + Debug + FromStr + Hash + PartialEq + Eq + Sync + 'static> Gramma
                     if let Some(bound) = operator.children.get(0) {
                         match bound.name {
                             Some(Nonterminal::Number) => {
-                                let bound = bound.contents().parse::<u32>().unwrap();
+                                let bound = bound.contents.parse::<u32>().unwrap();
                                 return Ok(Grammar::Repetition(Box::new(grammar), Some(bound), Some(bound)));
                             },
                             Some(Nonterminal::Range) => {
-                                let lower_bound = bound.children.get(0).unwrap().contents().parse::<u32>().unwrap();
-                                let upper_bound = bound.children.get(1).unwrap().contents().parse::<u32>().unwrap();
+                                let lower_bound = bound.children.get(0).unwrap().contents.parse::<u32>().unwrap();
+                                let upper_bound = bound.children.get(1).unwrap().contents.parse::<u32>().unwrap();
                                 return Ok(Grammar::Repetition(Box::new(grammar), Some(lower_bound), Some(upper_bound)));
                             },
                             Some(Nonterminal::LowerBound) => {
-                                let lower_bound = bound.children.get(0).unwrap().contents().parse::<u32>().unwrap();
+                                let lower_bound = bound.children.get(0).unwrap().contents.parse::<u32>().unwrap();
                                 return Ok(Grammar::Repetition(Box::new(grammar), Some(lower_bound), None));
                             },
                             Some(Nonterminal::UpperBound) => {
-                                let upper_bound = bound.children.get(0).unwrap().contents().parse::<u32>().unwrap();
+                                let upper_bound = bound.children.get(0).unwrap().contents.parse::<u32>().unwrap();
                                 return Ok(Grammar::Repetition(Box::new(grammar), None, Some(upper_bound)));
                             },
                             _ => return Err(format!("Invalid repetition bound '{:?}'", bound.name)),
                         }
                     } else {
-                        match operator.contents().as_str() {
+                        match operator.contents.as_str() {
                             "?" => return Ok(Grammar::Repetition(Box::new(grammar), Some(0), Some(1))),
                             "*" => return Ok(Grammar::Repetition(Box::new(grammar), Some(0), None)),
                             "+" => return Ok(Grammar::Repetition(Box::new(grammar), Some(1), None)),
@@ -130,16 +130,16 @@ impl<T: Clone + Debug + FromStr + Hash + PartialEq + Eq + Sync + 'static> Gramma
             },
             Some(Nonterminal::Unit) => Grammar::new(tree.children.get(0).unwrap()),
             Some(Nonterminal::Nonterminal) => {
-                match T::from_str(&tree.contents()) {
+                match T::from_str(&tree.contents) {
                     Ok(nonterminal) => Ok(Grammar::Nonterminal(nonterminal)),
-                    Err(_) => Err(format!("Unable to parse '{:?}'", tree.contents())),
+                    Err(_) => Err(format!("Unable to parse '{:?}'", tree.contents)),
                 }
             },
             Some(Nonterminal::Terminal) => Grammar::new(tree.children.get(0).unwrap()),
-            Some(Nonterminal::QuotedString) => Ok(Grammar::Literal(String::from(&tree.contents()[1..tree.contents().len()-1]))),
-            Some(Nonterminal::CharacterSet) => Ok(Grammar::CharacterClass(tree.contents())),
-            Some(Nonterminal::AnyCharacter) => Ok(Grammar::CharacterClass(tree.contents())),
-            Some(Nonterminal::CharacterClass) => Ok(Grammar::CharacterClass(tree.contents())),
+            Some(Nonterminal::QuotedString) => Ok(Grammar::Literal(String::from(&tree.contents[1..tree.contents.len()-1]))),
+            Some(Nonterminal::CharacterSet) => Ok(Grammar::CharacterClass(tree.contents.clone())),
+            Some(Nonterminal::AnyCharacter) => Ok(Grammar::CharacterClass(tree.contents.clone())),
+            Some(Nonterminal::CharacterClass) => Ok(Grammar::CharacterClass(tree.contents.clone())),
             ref any => Err(format!("'{:?}' is not valid nonterminal", any)),
         }
     }
