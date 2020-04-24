@@ -35,7 +35,7 @@ fn main() -> Result<(), String> {
         DifferenceOperator ::= '-';
         ProductOperator ::= '*';
         QuotientOperator ::= '/';
-        Number ::= '-'? ([0-9] '.' | '.')? [0-9]+;
+        Number ::= [+-]? (([0-9]+ ('.' [0-9]*)?) | ('.' [0-9]+));
         Whitespace ::= [ \t\r\n];
     "#;
     let expression = r#"
