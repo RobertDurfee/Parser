@@ -1,6 +1,6 @@
 [package]
 name = "parser"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Robert Durfee <robert@durfee.io>"]
 edition = "2018"
 

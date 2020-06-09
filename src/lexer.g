@@ -1,0 +1,17 @@
+[A-Z][a-zA-Z]* => NON_TERMINAL;
+::= => PRODUCTION_OPERATOR;
+; => SEMICOLON;
+\| => VERTICAL_BAR;
+\* => ASTERISK;
+\+ => PLUS_SIGN;
+\? => QUESTION_MARK;
+[A-Z_]+ => LITERAL_CLASS;
+'([^'\r\n\\]|\\.)+'|"([^"\r\n\\]|\\.)+" => LITERAL;
+\( => LEFT_PARENTHESIS;
+\) => RIGHT_PARENTHESIS;
+\{ => LEFT_CURLY_BRACKET;
+\} => RIGHT_CURLY_BRACKET;
+, => COMMA;
+[0-9]+ => INTEGER;
+\/\/.*$|\/\*.*\*\/ => ;
+[ \t\n\f\r] => ;
