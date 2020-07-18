@@ -7,40 +7,20 @@ use crate::error::{
 };
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum ParseTreeKind<N, T> {
-    Nonterminal(N),
-    Token(T),
-    Ephemeral,
+pub enum ParseTree<N, T> {
+    Token { token: T },
+    Nonterminal { nonterminal: N, tokens: Vec<T>, children: Vec<ParseTree<N, T>> },
+    Ephemeral { tokens: Vec<T>, children: Vec<ParseTree<N, T>> },
 }
 
-impl<N, T> ParseTreeKind<N, T> {
-    pub fn is_nonterminal(&self) -> bool {
+impl<N, T> ParseTree<N, T> {
+    pub fn tokens_len(&self) -> usize {
         match self {
-            ParseTreeKind::Nonterminal(..) => true,
-            _ => false,
+            ParseTree::Token { .. } => 1,
+            ParseTree::Nonterminal { tokens, .. } => tokens.len(),
+            ParseTree::Ephemeral { tokens, .. } => tokens.len(),
         }
     }
-
-    pub fn is_token(&self) -> bool {
-        match self {
-            ParseTreeKind::Token(..) => true,
-            _ => false,
-        }
-    }
-
-    pub fn is_ephemeral(&self) -> bool {
-        match self {
-            ParseTreeKind::Ephemeral => true,
-            _ => false,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct ParseTree<N, T> {
-    pub kind: ParseTreeKind<N, T>,
-    pub tokens: Vec<T>,
-    pub children: Vec<ParseTree<N, T>>,
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -58,10 +38,8 @@ impl<N: Clone + Debug + Ord, T: Clone + Debug + PartialEq> Expression<N, T> {
             Expression::Token { token } => {
                 if let Some(current_token) = tokens.get(0) {
                     if token == current_token {
-                        Ok(ParseTree {
-                            kind: ParseTreeKind::Token(current_token.clone()),
-                            tokens: vec![current_token.clone()],
-                            children: Vec::new(),
+                        Ok(ParseTree::Token {
+                            token: current_token.clone(),
                         })
                     } else {
                         Err(Error::from(ErrorKind::UnexpectedToken))
@@ -73,18 +51,32 @@ impl<N: Clone + Debug + Ord, T: Clone + Debug + PartialEq> Expression<N, T> {
             Expression::Nonterminal { nonterminal } => {
                 if let Some(expression) = productions.get(nonterminal) {
                     let parse_tree = expression.parse(tokens, productions)?;
-                    if parse_tree.kind.is_ephemeral() {
-                        Ok(ParseTree {
-                            kind: ParseTreeKind::Nonterminal(nonterminal.clone()),
-                            tokens: parse_tree.tokens,
-                            children: parse_tree.children,
-                        })
-                    } else {
-                        Ok(ParseTree {
-                            kind: ParseTreeKind::Nonterminal(nonterminal.clone()),
-                            tokens: parse_tree.tokens.clone(),
-                            children: vec![parse_tree],
-                        })
+                    match parse_tree {
+                        ParseTree::Token { token } => {
+                            Ok(ParseTree::Nonterminal {
+                                nonterminal: nonterminal.clone(),
+                                tokens: vec![token.clone()],
+                                children: vec![ParseTree::Token { token }],
+                            })
+                        },
+                        ParseTree::Nonterminal { nonterminal: child_nonterminal, tokens, children } => {
+                            Ok(ParseTree::Nonterminal {
+                                nonterminal: nonterminal.clone(),
+                                tokens: tokens.clone(),
+                                children: vec![ParseTree::Nonterminal {
+                                    nonterminal: child_nonterminal,
+                                    tokens,
+                                    children,
+                                }],
+                            })
+                        },
+                        ParseTree::Ephemeral { tokens, children } => {
+                            Ok(ParseTree::Nonterminal {
+                                nonterminal: nonterminal.clone(),
+                                tokens,
+                                children,
+                            })
+                        },
                     }
                 } else {
                     Err(Error::from(ErrorKind::UndefinedNonterminal))
@@ -99,22 +91,33 @@ impl<N: Clone + Debug + Ord, T: Clone + Debug + PartialEq> Expression<N, T> {
                 }
                 if let Some(mut parse_tree) = parse_trees.pop() {
                     while let Some(current_parse_tree) = parse_trees.pop() {
-                        if parse_tree.tokens.len() < current_parse_tree.tokens.len() {
+                        if parse_tree.tokens_len() < current_parse_tree.tokens_len() {
                             parse_tree = current_parse_tree;
                         }
                     }
-                    if parse_tree.kind.is_ephemeral() {
-                        Ok(ParseTree {
-                            kind: ParseTreeKind::Ephemeral,
-                            tokens: parse_tree.tokens,
-                            children: parse_tree.children,
-                        })
-                    } else {
-                        Ok(ParseTree {
-                            kind: ParseTreeKind::Ephemeral,
-                            tokens: parse_tree.tokens.clone(),
-                            children: vec![parse_tree],
-                        })
+                    match parse_tree {
+                        ParseTree::Token { token } => {
+                            Ok(ParseTree::Ephemeral {
+                                tokens: vec![token.clone()],
+                                children: vec![ParseTree::Token { token }],
+                            })
+                        },
+                        ParseTree::Nonterminal { nonterminal, tokens, children } => {
+                            Ok(ParseTree::Ephemeral {
+                                tokens: tokens.clone(),
+                                children: vec![ParseTree::Nonterminal {
+                                    nonterminal,
+                                    tokens,
+                                    children,
+                                }],
+                            })
+                        },
+                        ParseTree::Ephemeral { tokens, children } => {
+                            Ok(ParseTree::Ephemeral {
+                                tokens,
+                                children,
+                            })
+                        },
                     }
                 } else {
                     Err(Error::from(ErrorKind::NoMatch))
@@ -126,19 +129,30 @@ impl<N: Clone + Debug + Ord, T: Clone + Debug + PartialEq> Expression<N, T> {
                 let mut children = Vec::new();
                 for expression in expressions {
                     if let Ok(parse_tree) = expression.parse(&tokens[offset..], productions) {
-                        offset += parse_tree.tokens.len();
-                        matched_tokens.extend(parse_tree.tokens.clone());
-                        if parse_tree.kind.is_ephemeral() {
-                            children.extend(parse_tree.children);
-                        } else {
-                            children.push(parse_tree);
+                        offset += parse_tree.tokens_len();
+                        match parse_tree {
+                            ParseTree::Token { token } => {
+                                matched_tokens.push(token.clone());
+                                children.push(ParseTree::Token { token });
+                            },
+                            ParseTree::Nonterminal { nonterminal, tokens, children: child_children } => {
+                                matched_tokens.extend(tokens.clone());
+                                children.push(ParseTree::Nonterminal {
+                                    nonterminal,
+                                    tokens,
+                                    children: child_children,
+                                });
+                            },
+                            ParseTree::Ephemeral { tokens, children: child_children } => {
+                                matched_tokens.extend(tokens);
+                                children.extend(child_children);
+                            },
                         }
                     } else {
                         return Err(Error::from(ErrorKind::NoMatch));
                     }
                 }
-                Ok(ParseTree {
-                    kind: ParseTreeKind::Ephemeral,
+                Ok(ParseTree::Ephemeral {
                     tokens: matched_tokens,
                     children,
                 })
@@ -151,16 +165,27 @@ impl<N: Clone + Debug + Ord, T: Clone + Debug + PartialEq> Expression<N, T> {
                 while match max { Some(max) => count < *max, None => true } {
                     if let Ok(parse_tree) = expression.parse(&tokens[offset..], productions) {
                         count += 1;
-                        offset += parse_tree.tokens.len();
-                        matched_tokens.extend(parse_tree.tokens.clone());
-                        if parse_tree.kind.is_ephemeral() {
-                            children.extend(parse_tree.children);
-                        } else {
-                            children.push(parse_tree);
+                        offset += parse_tree.tokens_len();
+                        match parse_tree {
+                            ParseTree::Token { token } => {
+                                matched_tokens.push(token.clone());
+                                children.push(ParseTree::Token { token });
+                            },
+                            ParseTree::Nonterminal { nonterminal, tokens, children: child_children } => {
+                                matched_tokens.extend(tokens.clone());
+                                children.push(ParseTree::Nonterminal {
+                                    nonterminal,
+                                    tokens,
+                                    children: child_children,
+                                });
+                            },
+                            ParseTree::Ephemeral { tokens, children: child_children } => {
+                                matched_tokens.extend(tokens);
+                                children.extend(child_children);
+                            },
                         }
                     } else if match min { Some(min) => count >= *min, None => true } {
-                        return Ok(ParseTree {
-                            kind: ParseTreeKind::Ephemeral,
+                        return Ok(ParseTree::Ephemeral {
                             tokens: matched_tokens,
                             children,
                         });
@@ -168,8 +193,7 @@ impl<N: Clone + Debug + Ord, T: Clone + Debug + PartialEq> Expression<N, T> {
                         return Err(Error::from(ErrorKind::PartialMatch));
                     }
                 }
-                Ok(ParseTree {
-                    kind: ParseTreeKind::Ephemeral,
+                Ok(ParseTree::Ephemeral {
                     tokens: matched_tokens,
                     children,
                 })
@@ -192,8 +216,16 @@ impl<N: Clone + Debug + Ord, T: Clone + Debug + PartialEq> Parser<N, T> {
     pub fn parse(&self, tokens: &[T]) -> Result<ParseTree<N, T>> {
         if let Some(expression) = self.productions.get(&self.root) {
             let mut parse_tree = expression.parse(tokens, &self.productions)?;
-            if parse_tree.tokens.len() == tokens.len() {
-                parse_tree.kind = ParseTreeKind::Nonterminal(self.root.clone());
+            if parse_tree.tokens_len() == tokens.len() {
+                if let ParseTree::Ephemeral { tokens, children } = parse_tree {
+                    parse_tree = ParseTree::Nonterminal {
+                        nonterminal: self.root.clone(),
+                        tokens,
+                        children,
+                    }
+                } else {
+                    unreachable!();
+                }
                 Ok(parse_tree)
             } else {
                 Err(Error::from(ErrorKind::PartialMatch))
@@ -274,7 +306,6 @@ macro_rules! que { // question mark
 mod tests {
     use crate::{
         error::Result,
-        ParseTreeKind,
         ParseTree,
         Parser,
     };
@@ -301,99 +332,71 @@ mod tests {
             Number,
         }
         use Nonterminal::*;
-        let expected = ParseTree {
-            kind: ParseTreeKind::Nonterminal(Addition),
+        let expected = ParseTree::Nonterminal {
+            nonterminal: Addition,
             tokens: vec![NUMBER, SLASH, LEFT_PARENTHESIS, NUMBER, PLUS_SIGN, HYPHEN, NUMBER, RIGHT_PARENTHESIS],
             children: vec![
-                ParseTree {
-                    kind: ParseTreeKind::Nonterminal(Multiplication),
+                ParseTree::Nonterminal {
+                    nonterminal: Multiplication,
                     tokens: vec![NUMBER, SLASH, LEFT_PARENTHESIS, NUMBER, PLUS_SIGN, HYPHEN, NUMBER, RIGHT_PARENTHESIS],
                     children: vec![
-                        ParseTree {
-                            kind: ParseTreeKind::Nonterminal(Atom),
+                        ParseTree::Nonterminal {
+                            nonterminal: Atom,
                             tokens: vec![NUMBER],
                             children: vec![
-                                ParseTree {
-                                    kind: ParseTreeKind::Nonterminal(Number),
+                                ParseTree::Nonterminal {
+                                    nonterminal: Number,
                                     tokens: vec![NUMBER],
                                     children: vec![
-                                        ParseTree {
-                                            kind: ParseTreeKind::Token(NUMBER),
-                                            tokens: vec![NUMBER],
-                                            children: Vec::new(),
-                                        }
+                                        ParseTree::Token { token: NUMBER }
                                     ],
                                 },
                             ],
                         },
-                        ParseTree {
-                            kind: ParseTreeKind::Token(SLASH),
-                            tokens: vec![SLASH],
-                            children: Vec::new(),
-                        },
-                        ParseTree {
-                            kind: ParseTreeKind::Nonterminal(Atom),
+                        ParseTree::Token { token: SLASH },
+                        ParseTree::Nonterminal {
+                            nonterminal: Atom,
                             tokens: vec![LEFT_PARENTHESIS, NUMBER, PLUS_SIGN, HYPHEN, NUMBER, RIGHT_PARENTHESIS],
                             children: vec![
-                                ParseTree {
-                                    kind: ParseTreeKind::Token(LEFT_PARENTHESIS),
-                                    tokens: vec![LEFT_PARENTHESIS],
-                                    children: Vec::new(),
-                                },
-                                ParseTree {
-                                    kind: ParseTreeKind::Nonterminal(Addition),
+                                ParseTree::Token { token: LEFT_PARENTHESIS },
+                                ParseTree::Nonterminal {
+                                    nonterminal: Addition,
                                     tokens: vec![NUMBER, PLUS_SIGN, HYPHEN, NUMBER],
                                     children: vec![
-                                        ParseTree {
-                                            kind: ParseTreeKind::Nonterminal(Multiplication),
+                                        ParseTree::Nonterminal {
+                                            nonterminal: Multiplication,
                                             tokens: vec![NUMBER],
                                             children: vec![
-                                                ParseTree {
-                                                    kind: ParseTreeKind::Nonterminal(Atom),
+                                                ParseTree::Nonterminal {
+                                                    nonterminal: Atom,
                                                     tokens: vec![NUMBER],
                                                     children: vec![
-                                                        ParseTree {
-                                                            kind: ParseTreeKind::Nonterminal(Number),
+                                                        ParseTree::Nonterminal {
+                                                            nonterminal: Number,
                                                             tokens: vec![NUMBER],
                                                             children: vec![
-                                                                ParseTree {
-                                                                    kind: ParseTreeKind::Token(NUMBER),
-                                                                    tokens: vec![NUMBER],
-                                                                    children: Vec::new(),
-                                                                }
+                                                                ParseTree::Token { token: NUMBER }
                                                             ],
                                                         }
                                                     ]
                                                 },
                                             ]
                                         },
-                                        ParseTree {
-                                            kind: ParseTreeKind::Token(PLUS_SIGN),
-                                            tokens: vec![PLUS_SIGN],
-                                            children: Vec::new(),
-                                        },
-                                        ParseTree {
-                                            kind: ParseTreeKind::Nonterminal(Multiplication),
+                                        ParseTree::Token { token: PLUS_SIGN },
+                                        ParseTree::Nonterminal {
+                                            nonterminal: Multiplication,
                                             tokens: vec![HYPHEN, NUMBER],
                                             children: vec![
-                                                ParseTree {
-                                                    kind: ParseTreeKind::Nonterminal(Atom),
+                                                ParseTree::Nonterminal {
+                                                    nonterminal: Atom,
                                                     tokens: vec![HYPHEN, NUMBER],
                                                     children: vec![
-                                                        ParseTree {
-                                                            kind: ParseTreeKind::Nonterminal(Number),
+                                                        ParseTree::Nonterminal {
+                                                            nonterminal: Number,
                                                             tokens: vec![HYPHEN, NUMBER],
                                                             children: vec![
-                                                                ParseTree {
-                                                                    kind: ParseTreeKind::Token(HYPHEN),
-                                                                    tokens: vec![HYPHEN],
-                                                                    children: Vec::new(),
-                                                                },
-                                                                ParseTree {
-                                                                    kind: ParseTreeKind::Token(NUMBER),
-                                                                    tokens: vec![NUMBER],
-                                                                    children: Vec::new(),
-                                                                },
+                                                                ParseTree::Token { token: HYPHEN },
+                                                                ParseTree::Token { token: NUMBER },
                                                             ],
                                                         }
                                                     ]
@@ -402,11 +405,7 @@ mod tests {
                                         },
                                     ]
                                 },
-                                ParseTree {
-                                    kind: ParseTreeKind::Token(RIGHT_PARENTHESIS),
-                                    tokens: vec![RIGHT_PARENTHESIS],
-                                    children: Vec::new(),
-                                },
+                                ParseTree::Token { token: RIGHT_PARENTHESIS },
                             ]
                         }
                     ],
