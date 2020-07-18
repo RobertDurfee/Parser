@@ -1,5 +1,4 @@
 use std::collections::BTreeMap as Map;
-use std::fmt::Debug;
 use crate::error::{
     Error,
     ErrorKind,
@@ -32,7 +31,7 @@ pub enum Expression<N, T> {
     Repetition { expression: Box<Expression<N, T>>, min: Option<u32>, max: Option<u32> },
 }
 
-impl<N: Clone + Debug + Ord, T: Clone + Debug + PartialEq> Expression<N, T> {
+impl<N: Clone + Ord, T: Clone + PartialEq> Expression<N, T> {
     pub fn parse(&self, tokens: &[T], productions: &Map<N, Expression<N, T>>) -> Result<ParseTree<N, T>> {
         match self {
             Expression::Token { token } => {
@@ -208,7 +207,7 @@ pub struct Parser<N, T> {
     root: N,
 }
 
-impl<N: Clone + Debug + Ord, T: Clone + Debug + PartialEq> Parser<N, T> {
+impl<N: Clone + Ord, T: Clone + PartialEq> Parser<N, T> {
     pub fn new(_productions: &str) -> Parser<N, T> {
         panic!("Not implemented")
     }
