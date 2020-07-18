@@ -1,21 +1,11 @@
 #[macro_use]
-extern crate lazy_static;
+pub mod util;
+pub mod error;
+pub mod parser;
 
-mod parser;
-mod util;
-mod character_class;
-mod grammar;
+pub use crate::parser::{
+    ParseTreeKind,
+    ParseTree,
+    Parser,
+};
 
-use std::fmt::Debug;
-use std::hash::Hash;
-use std::collections::HashMap;
-use std::str::FromStr;
-use parser::{Term, Tree};
-
-pub fn parse<'a, T: Clone + Debug + Eq + Hash + PartialEq>(input: &'a str, definitions: &HashMap<T, Box<Term<T>>>, root: T) -> Result<Tree<T>, String> {
-    return parser::parse(input, definitions, root);
-}
-
-pub fn definitions<T: Clone + Debug + Eq + FromStr + Hash + Sync + 'static>(input: &str) -> Result<HashMap<T, Box<parser::Term<T>>>, String> {
-    return grammar::definitions(input);
-}
