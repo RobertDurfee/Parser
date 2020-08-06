@@ -196,11 +196,13 @@ pub struct Parser<N, T> {
     root: N,
 }
 
-impl<N: Clone + Ord, T: Clone + PartialEq> Parser<N, T> {
+impl<N, T> Parser<N, T> {
     pub fn new(productions: Map<N, Expression<N, T>>, root: N) -> Parser<N, T> {
         Parser { productions, root }
     }
+}
 
+impl<N: Clone + Ord, T: Clone + PartialEq> Parser<N, T> {
     pub fn parse(&self, tokens: &[Token<T>]) -> Result<ParseTree<N, T>> {
         if let Some(expression) = self.productions.get(&self.root) {
             let mut parse_tree = expression.parse(tokens, &self.productions)?;
