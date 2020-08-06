@@ -6,5 +6,6 @@ pub mod parser;
 pub use crate::parser::{
     ParseTree,
     Parser,
+    Expression,
 };
 
