@@ -1,5 +1,5 @@
 use std::collections::BTreeMap as Map;
-use lexer::Token;
+use lexer_bootstrap::Token;
 use crate::error::{
     Error,
     ErrorKind,
@@ -197,8 +197,8 @@ pub struct Parser<N, T> {
 }
 
 impl<N: Clone + Ord, T: Clone + PartialEq> Parser<N, T> {
-    pub fn new(_productions: &str) -> Parser<N, T> {
-        panic!("Not implemented")
+    pub fn new(productions: Map<N, Expression<N, T>>, root: N) -> Parser<N, T> {
+        Parser { productions, root }
     }
 
     pub fn parse(&self, tokens: &[Token<T>]) -> Result<ParseTree<N, T>> {
@@ -215,10 +215,6 @@ impl<N: Clone + Ord, T: Clone + PartialEq> Parser<N, T> {
                 Ok(parse_tree)
             } else { Err(Error::from(ErrorKind::PartialMatch)) }
         } else { Err(Error::from(ErrorKind::UndefinedRootNonterminal)) }
-    }
-
-    pub fn from_productions(productions: Map<N, Expression<N, T>>, root: N) -> Parser<N, T> {
-        Parser { productions, root }
     }
 }
 
@@ -286,7 +282,7 @@ macro_rules! que { // question mark
 
 #[cfg(test)]
 mod tests {
-    use lexer::Token;
+    use lexer_bootstrap::Token;
     use crate::{
         error::Result,
         ParseTree,
@@ -434,7 +430,7 @@ mod tests {
                 }
             ]
         };
-        let parser = Parser::from_productions(map![
+        let parser = Parser::new(map![
             Addition => con![non!(Multiplication), ast!(con![alt![tok!(PLUS_SIGN), tok!(HYPHEN)], non!(Multiplication)])],
             Multiplication => con![non!(Atom), ast!(con![alt![tok!(ASTERISK), tok!(SLASH)], non!(Atom)])],
             Atom => alt![non!(Number), con![tok!(LEFT_PARENTHESIS), non!(Addition), tok!(RIGHT_PARENTHESIS)]],
