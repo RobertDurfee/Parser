@@ -14,6 +14,13 @@ pub enum ErrorKind {
     UndefinedRootNonterminal,
     NoMatch,
     PartialMatch,
+    NoProductions,
+    NotNonterminal,
+    NotExpression,
+    NotRange,
+    NotInteger,
+    LexerError,
+    NotTokenKind,
 }
 
 impl ErrorKind {
@@ -26,6 +33,13 @@ impl ErrorKind {
             ErrorKind::UndefinedRootNonterminal => "undefined root nonterminal",
             ErrorKind::NoMatch => "no match",
             ErrorKind::PartialMatch => "partial match",
+            ErrorKind::NoProductions => "no productions",
+            ErrorKind::NotNonterminal => "not nonterminal",
+            ErrorKind::NotExpression => "not expression",
+            ErrorKind::NotRange => "not range",
+            ErrorKind::NotInteger => "not integer",
+            ErrorKind::LexerError => "lexer error",
+            ErrorKind::NotTokenKind => "not token kind",
         }
     }
 }
@@ -102,5 +116,11 @@ impl error::Error for Error {
             Representation::Simple(..) => None,
             Representation::Custom(ref custom) => custom.error.source(),
         }
+    }
+}
+
+impl convert::From<lexer_bootstrap::error::Error> for Error {
+    fn from(lexer_error: lexer_bootstrap::error::Error) -> Error {
+        Error { representation: Representation::Custom(Box::new(Custom { kind: ErrorKind::LexerError, error: Box::new(lexer_error) })) }
     }
 }
