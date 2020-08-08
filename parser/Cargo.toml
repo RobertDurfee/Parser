@@ -11,4 +11,4 @@ lazy_static = "1.4.0"
 interval-map = { git = "https://github.com/RobertDurfee/IntervalMap" }
 re-bootstrap = { git = "https://github.com/RobertDurfee/RegularExpression" }
 lexer-bootstrap = { git = "https://github.com/RobertDurfee/LexerGenerator" }
-parser-bootstrap = { path = "../parser-bootstrap" }
+parser-bootstrap = { git = "https://github.com/RobertDurfee/ParserGenerator" }
