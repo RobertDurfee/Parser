@@ -22,7 +22,7 @@ pub struct Parser<N, T> {
 
 impl<N: FromStr + Ord, T: FromStr> Parser<N, T> {
     pub fn new(productions: &str, root: N) -> Result<Parser<N, T>> {
-        let mut lexer = Lexer::new(LEXER_PRODUCTIONS.clone()); lexer.compile();
+        let lexer = Lexer::new(LEXER_PRODUCTIONS.clone());
         let parser = ParserBootstrap::new(PARSER_PRODUCTIONS.clone(), Nonterminal::Root);
         let tokens = lexer.lex(productions)?;
         let parse_tree = parser.parse(&tokens)?;
