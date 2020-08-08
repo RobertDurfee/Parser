@@ -1,7 +1,6 @@
 #[macro_use]
-pub mod util;
-pub mod error;
-pub mod parser;
+mod util;
+mod parser;
 
 pub use crate::parser::{
     ParseTree,

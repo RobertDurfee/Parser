@@ -1,10 +1,7 @@
 use std::collections::BTreeMap as Map;
 use lexer_bootstrap::Token;
-use crate::error::{
-    Error,
-    ErrorKind,
-    Result,
-};
+
+type Result<T> = std::result::Result<T, &'static str>;
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum ParseTree<N, T> {
@@ -41,8 +38,8 @@ impl<N: Clone + Ord, T: Clone + PartialEq> Expression<N, T> {
                         Ok(ParseTree::Token {
                             token: current_token.clone(),
                         })
-                    } else { Err(Error::from(ErrorKind::UnexpectedToken)) }
-                } else { Err(Error::from(ErrorKind::UnexpectedEOF)) }
+                    } else { Err("unexpected token") }
+                } else { Err("unexpected eof") }
             },
             Expression::Nonterminal { nonterminal } => {
                 if let Some(expression) = productions.get(nonterminal) {
@@ -74,7 +71,7 @@ impl<N: Clone + Ord, T: Clone + PartialEq> Expression<N, T> {
                             })
                         },
                     }
-                } else { Err(Error::from(ErrorKind::UndefinedNonterminal)) }
+                } else { Err("undefined nonterminal") }
             },
             Expression::Alternation { expressions } => {
                 let mut parse_trees = Vec::new();
@@ -113,7 +110,7 @@ impl<N: Clone + Ord, T: Clone + PartialEq> Expression<N, T> {
                             })
                         },
                     }
-                } else { Err(Error::from(ErrorKind::NoMatch)) }
+                } else { Err("no match") }
             },
             Expression::Concatenation { expressions } => {
                 let mut offset = 0;
@@ -140,7 +137,7 @@ impl<N: Clone + Ord, T: Clone + PartialEq> Expression<N, T> {
                                 children.extend(child_children);
                             },
                         }
-                    } else { return Err(Error::from(ErrorKind::NoMatch)); }
+                    } else { return Err("no match"); }
                 }
                 Ok(ParseTree::Ephemeral {
                     tokens: matched_tokens,
@@ -179,7 +176,7 @@ impl<N: Clone + Ord, T: Clone + PartialEq> Expression<N, T> {
                             tokens: matched_tokens,
                             children,
                         });
-                    } else { return Err(Error::from(ErrorKind::PartialMatch)); }
+                    } else { return Err("partial match"); }
                 }
                 Ok(ParseTree::Ephemeral {
                     tokens: matched_tokens,
@@ -239,22 +236,22 @@ impl<N: Clone + Ord, T: Clone + PartialEq> Parser<N, T> {
                     },
                 };
                 Ok(parse_tree)
-            } else { Err(Error::from(ErrorKind::PartialMatch)) }
-        } else { Err(Error::from(ErrorKind::UndefinedRootNonterminal)) }
+            } else { Err("partial match") }
+        } else { Err("undefined root nonterminal") }
     }
 }
 
 #[macro_export]
 macro_rules! tok {
     ($x:expr) => {{
-        $crate::parser::Expression::TokenKind { token_kind: $x }
+        $crate::Expression::TokenKind { token_kind: $x }
     }}
 }
 
 #[macro_export]
 macro_rules! non {
     ($x:expr) => {{
-        $crate::parser::Expression::Nonterminal { nonterminal: $x }
+        $crate::Expression::Nonterminal { nonterminal: $x }
     }}
 }
 
@@ -264,7 +261,7 @@ macro_rules! alt {
         #[allow(unused_mut)]
         let mut temp_vec = Vec::new();
         $(temp_vec.push($x);)*
-        $crate::parser::Expression::Alternation { expressions: temp_vec }
+        $crate::Expression::Alternation { expressions: temp_vec }
     }}
 }
 
@@ -274,43 +271,43 @@ macro_rules! con {
         #[allow(unused_mut)]
         let mut temp_vec = Vec::new();
         $(temp_vec.push($x);)*
-        $crate::parser::Expression::Concatenation { expressions: temp_vec }
+        $crate::Expression::Concatenation { expressions: temp_vec }
     }}
 }
 
 #[macro_export]
 macro_rules! rep {
     ($x:expr, $y:expr, $z:expr) => {{
-        $crate::parser::Expression::Repetition { expression: Box::new($x), min: $y, max: $z }
+        $crate::Expression::Repetition { expression: Box::new($x), min: $y, max: $z }
     }}
 }
 
 #[macro_export]
 macro_rules! ast { // asterisk
     ($x:expr) => {{
-        $crate::parser::Expression::Repetition { expression: Box::new($x), min: None, max: None }
+        $crate::Expression::Repetition { expression: Box::new($x), min: None, max: None }
     }}
 }
 
 #[macro_export]
 macro_rules! plu { // plus sign
     ($x:expr) => {{
-        $crate::parser::Expression::Repetition { expression: Box::new($x), min: Some(1), max: None }
+        $crate::Expression::Repetition { expression: Box::new($x), min: Some(1), max: None }
     }}
 }
 
 #[macro_export]
 macro_rules! que { // question mark
     ($x:expr) => {{
-        $crate::parser::Expression::Repetition { expression: Box::new($x), min: None, max: Some(1) }
+        $crate::Expression::Repetition { expression: Box::new($x), min: None, max: Some(1) }
     }}
 }
 
 #[cfg(test)]
 mod tests {
+    use super::Result;
     use lexer_bootstrap::Token;
     use crate::{
-        error::Result,
         ParseTree,
         Parser,
     };

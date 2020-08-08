@@ -3,17 +3,18 @@ use lexer_bootstrap::{
     Token,
     Lexer,
 };
-use parser_bootstrap::{
-    error::Result,
-    Parser as ParserBootstrap,
+use parser_bootstrap::Parser as ParserBootstrap;
+use crate::{
+    grammar::{
+        LEXER_PRODUCTIONS,
+        PARSER_PRODUCTIONS,
+        Nonterminal,
+        as_productions
+    },
     ParseTree,
 };
-use crate::grammar::{
-    LEXER_PRODUCTIONS,
-    PARSER_PRODUCTIONS,
-    Nonterminal,
-    as_productions,
-};
+
+type Result<T> = std::result::Result<T, &'static str>;
 
 pub struct Parser<N, T> {
     parser: ParserBootstrap<N, T>,
@@ -40,15 +41,11 @@ impl<N: Clone + Ord, T: Clone + PartialEq> Parser<N, T> {
 mod tests {
     use std::str::FromStr;
     use lexer_bootstrap::Token;
-    use parser_bootstrap::{
-        error::{
-            Result,
-            Error,
-            ErrorKind,
-        },
+    use crate::{
+        Parser,
         ParseTree,
     };
-    use crate::Parser;
+    use super::Result;
 
     #[allow(non_camel_case_types)]
     #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -63,7 +60,7 @@ mod tests {
     }
 
     impl FromStr for TokenKind {
-        type Err = Error;
+        type Err = &'static str;
 
         fn from_str(text: &str) -> Result<Self> {
             use TokenKind::*;
@@ -75,7 +72,7 @@ mod tests {
                 "NUMBER" => Ok(NUMBER),
                 "LEFT_PARENTHESIS" => Ok(LEFT_PARENTHESIS),
                 "RIGHT_PARENTHESIS" => Ok(RIGHT_PARENTHESIS),
-                _ => Err(Error::from(ErrorKind::NotTokenKind))
+                _ => Err("not token kind"),
             }
         }
     }
@@ -89,7 +86,7 @@ mod tests {
     }
 
     impl FromStr for Nonterminal {
-        type Err = Error;
+        type Err = &'static str;
 
         fn from_str(text: &str) -> Result<Self> {
             use Nonterminal::*;
@@ -98,7 +95,7 @@ mod tests {
                 "Multiplication" => Ok(Multiplication),
                 "Atom" => Ok(Atom),
                 "Number" => Ok(Number),
-                _ => Err(Error::from(ErrorKind::NotNonterminal))
+                _ => Err("not nonterminal")
             }
         }
     }

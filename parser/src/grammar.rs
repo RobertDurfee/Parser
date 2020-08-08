@@ -13,23 +13,20 @@ use re_bootstrap::{
     sgl as rsgl,
     rng as rrng,
 };
-use parser_bootstrap::{
-    error::{
-        Result,
-        Error,
-        ErrorKind,
-    },
-    Expression,
-    tok as ptok,
-    non as pnon,
-    alt as palt,
+use crate::{
     con as pcon,
+    alt as palt,
     ast as past,
     plu as pplu,
+    non as pnon,
+    tok as ptok,
     que as pque,
     ParseTree,
+    Expression,
     map,
 };
+
+type Result<T> = std::result::Result<T, &'static str>;
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
@@ -81,9 +78,9 @@ pub fn as_productions<N: FromStr + Ord, T: FromStr>(parse_tree: &ParseTree<Nonte
             Production => {
                 Ok(map![as_nonterminal(&children[0])? => as_expression(&children[2])?])
             },
-            _ => Err(Error::from(ErrorKind::NoProductions))
+            _ => Err("no productions")
         }
-    } else { Err(Error::from(ErrorKind::NoProductions)) }
+    } else { Err("no productions") }
 }
 
 fn as_nonterminal<N: FromStr>(parse_tree: &ParseTree<Nonterminal, TokenKind>) -> Result<N> {
@@ -92,9 +89,9 @@ fn as_nonterminal<N: FromStr>(parse_tree: &ParseTree<Nonterminal, TokenKind>) ->
         if let NONTERMINAL = token.kind() {
             if let Ok(nonterminal) = N::from_str(token.text()) {
                 Ok(nonterminal)
-            } else { Err(Error::from(ErrorKind::NotNonterminal)) }
-        } else { Err(Error::from(ErrorKind::NotNonterminal)) }
-    } else { Err(Error::from(ErrorKind::NotNonterminal)) }
+            } else { Err("not nonterminal") }
+        } else { Err("not nonterminal") }
+    } else { Err("not nonterminal") }
 }
 
 fn as_expression<N: FromStr, T: FromStr>(parse_tree: &ParseTree<Nonterminal, TokenKind>) -> Result<Expression<N, T>> {
@@ -147,7 +144,7 @@ fn as_expression<N: FromStr, T: FromStr>(parse_tree: &ParseTree<Nonterminal, Tok
                         Ok(as_expression(&children[0])?)
                     }
                 },
-                _ => Err(Error::from(ErrorKind::NotExpression))
+                _ => Err("not expression")
             }
         },
         ParseTree::Token { token } => {
@@ -156,18 +153,18 @@ fn as_expression<N: FromStr, T: FromStr>(parse_tree: &ParseTree<Nonterminal, Tok
                 NONTERMINAL => {
                     if let Ok(nonterminal) = N::from_str(token.text()) {
                         Ok(Expression::Nonterminal { nonterminal })
-                    } else { Err(Error::from(ErrorKind::NotExpression)) }
+                    } else { Err("not expression") }
                 },
                 // /[A-Z][0-9A-Z_]*/ => TOKEN_KIND;
                 TOKEN_KIND => {
                     if let Ok(token_kind) = T::from_str(token.text()) {
                         Ok(Expression::TokenKind { token_kind })
-                    } else { Err(Error::from(ErrorKind::NotExpression)) }
+                    } else { Err("not expression") }
                 },
-                _ => Err(Error::from(ErrorKind::NotExpression))
+                _ => Err("not expression")
             }
         }
-        _ => Err(Error::from(ErrorKind::NotExpression))
+        _ => Err("not expression")
     }
 }
 
@@ -191,7 +188,7 @@ fn as_range(parse_tree: &ParseTree<Nonterminal, TokenKind>) -> Result<(Option<u3
                 Range => {
                     Ok((Some(as_integer(&children[1])?), Some(as_integer(&children[3])?)))
                 },
-                _ => Err(Error::from(ErrorKind::NotRange))
+                _ => Err("not range")
             }
         },
         ParseTree::Token { token } => {
@@ -208,10 +205,10 @@ fn as_range(parse_tree: &ParseTree<Nonterminal, TokenKind>) -> Result<(Option<u3
                 QUESTION_MARK => {
                     Ok((None, Some(1)))
                 },
-                _ => Err(Error::from(ErrorKind::NotRange))
+                _ => Err("not range")
             }
         }
-        _ => Err(Error::from(ErrorKind::NotRange))
+        _ => Err("not range")
     }
 }
 
@@ -221,9 +218,9 @@ fn as_integer(parse_tree: &ParseTree<Nonterminal, TokenKind>) -> Result<u32> {
         if let INTEGER = token.kind() {
             if let Ok(integer) = token.text().parse::<u32>() {
                 Ok(integer)
-            } else { Err(Error::from(ErrorKind::NotInteger)) }
-        } else { Err(Error::from(ErrorKind::NotInteger)) }
-    } else { Err(Error::from(ErrorKind::NotInteger)) }
+            } else { Err("not integer") }
+        } else { Err("not integer") }
+    } else { Err("not integer") }
 }
 
 lazy_static! {
