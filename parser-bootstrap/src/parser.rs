@@ -207,13 +207,37 @@ impl<N: Clone + Ord, T: Clone + PartialEq> Parser<N, T> {
         if let Some(expression) = self.productions.get(&self.root) {
             let mut parse_tree = expression.parse(tokens, &self.productions)?;
             if parse_tree.tokens_len() == tokens.len() {
-                if let ParseTree::Ephemeral { tokens, children } = parse_tree {
-                    parse_tree = ParseTree::Nonterminal {
-                        nonterminal: self.root.clone(),
-                        tokens,
-                        children,
-                    }
-                } else { unreachable!("root of parse tree is not ephemeral"); }
+                parse_tree = match parse_tree {
+                    ParseTree::Token { token } => {
+                        ParseTree::Nonterminal {
+                            nonterminal: self.root.clone(),
+                            tokens: vec![token.clone()],
+                            children: vec![
+                                ParseTree::Token { token }
+                            ]
+                        }
+                    },
+                    ParseTree::Nonterminal { nonterminal, tokens, children } => {
+                        ParseTree::Nonterminal {
+                            nonterminal: self.root.clone(),
+                            tokens: tokens.clone(),
+                            children: vec![
+                                ParseTree::Nonterminal {
+                                    nonterminal,
+                                    tokens,
+                                    children
+                                }
+                            ]
+                        }
+                    },
+                    ParseTree::Ephemeral { tokens, children } => {
+                        ParseTree::Nonterminal {
+                            nonterminal: self.root.clone(),
+                            tokens,
+                            children,
+                        }
+                    },
+                };
                 Ok(parse_tree)
             } else { Err(Error::from(ErrorKind::PartialMatch)) }
         } else { Err(Error::from(ErrorKind::UndefinedRootNonterminal)) }

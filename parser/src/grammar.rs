@@ -13,7 +13,6 @@ use re_bootstrap::{
     plu as rplu,
     sgl as rsgl,
     rng as rrng,
-    Re,
 };
 use parser_bootstrap::{
     error::{
@@ -74,26 +73,23 @@ where
     <N as FromStr>::Err : Debug,
     T : FromStr,
 {
-    match parse_tree {
-        ParseTree::Nonterminal { nonterminal, children, .. } => {
-            match nonterminal {
-                // Root ::= Production*;
-                Root => {
-                    let mut productions = Map::new();
-                    for child in children {
-                        productions.extend(as_productions(child)?);
-                    }
-                    Ok(productions)
-                },
-                // Production ::= NONTERMINAL PRODUCTION_OPERATOR Alternation SEMICOLON;
-                Production => {
-                    Ok(map![as_nonterminal(&children[0])? => as_expression(&children[2])?])
-                },
-                _ => Err(Error::from(ErrorKind::NoProductions))
-            }
+    if let ParseTree::Nonterminal { nonterminal, children, .. } = parse_tree {
+        match nonterminal {
+            // Root ::= Production*;
+            Root => {
+                let mut productions = Map::new();
+                for child in children {
+                    productions.extend(as_productions(child)?);
+                }
+                Ok(productions)
+            },
+            // Production ::= NONTERMINAL PRODUCTION_OPERATOR Alternation SEMICOLON;
+            Production => {
+                Ok(map![as_nonterminal(&children[0])? => as_expression(&children[2])?])
+            },
+            _ => Err(Error::from(ErrorKind::NoProductions))
         }
-        _ => Err(Error::from(ErrorKind::NoProductions))
-    }
+    } else { Err(Error::from(ErrorKind::NoProductions)) }
 }
 
 fn as_nonterminal<N>(parse_tree: &ParseTree<Nonterminal, TokenKind>) -> Result<N>
@@ -101,14 +97,12 @@ where
     N : FromStr,
     <N as FromStr>::Err : Debug
 {
-    match parse_tree {
-        ParseTree::Token { token } => {
-            if let NONTERMINAL = token.kind() {
-                Ok(N::from_str(token.text()).unwrap())
-            } else { Err(Error::from(ErrorKind::NotNonterminal)) }
-        },
-        _ => Err(Error::from(ErrorKind::NotNonterminal))
-    }
+    if let ParseTree::Token { token } = parse_tree {
+        // /[A-Z][0-9A-Z]*[a-z][0-9a-zA-Z]*/ => NONTERMINAL;
+        if let NONTERMINAL = token.kind() {
+            Ok(N::from_str(token.text()).unwrap())
+        } else { Err(Error::from(ErrorKind::NotNonterminal)) }
+    } else { Err(Error::from(ErrorKind::NotNonterminal)) }
 }
 
 fn as_expression<N, T>(parse_tree: &ParseTree<Nonterminal, TokenKind>) -> Result<Expression<N, T>>
@@ -170,11 +164,13 @@ where
         },
         ParseTree::Token { token } => {
             match token.kind() {
+                // /[A-Z][0-9A-Z]*[a-z][0-9a-zA-Z]*/ => NONTERMINAL;
                 NONTERMINAL => {
                     if let Ok(nonterminal) = N::from_str(token.text()) {
                         Ok(Expression::Nonterminal { nonterminal })
                     } else { Err(Error::from(ErrorKind::NotExpression)) }
                 },
+                // /[A-Z][0-9A-Z_]*/ => TOKEN_KIND;
                 TOKEN_KIND => {
                     if let Ok(token_kind) = T::from_str(token.text()) {
                         Ok(Expression::TokenKind { token_kind })
@@ -193,36 +189,34 @@ fn as_range(parse_tree: &ParseTree<Nonterminal, TokenKind>) -> Result<(Option<u3
             match nonterminal {
                 // Exact ::= LEFT_CURLY_BRACKET INTEGER RIGHT_CURLY_BRACKET;
                 Exact => {
-                    let value = as_integer(&children[1])?;
-                    Ok((Some(value), Some(value)))
+                    Ok((Some(as_integer(&children[1])?), Some(as_integer(&children[1])?)))
                 },
                 // Minimum ::= LEFT_CURLY_BRACKET INTEGER COMMA RIGHT_CURLY_BRACKET;
                 Minimum => {
-                    let min = as_integer(&children[1])?;
-                    Ok((Some(min), None))
+                    Ok((Some(as_integer(&children[1])?), None))
                 },
                 // Maximum ::= LEFT_CURLY_BRACKET COMMA INTEGER RIGHT_CURLY_BRACKET;
                 Maximum => {
-                    let max = as_integer(&children[2])?;
-                    Ok((None, Some(max)))
+                    Ok((None, Some(as_integer(&children[2])?)))
                 },
                 // Range ::= LEFT_CURLY_BRACKET INTEGER COMMA INTEGER RIGHT_CURLY_BRACKET:
                 Range => {
-                    let min = as_integer(&children[1])?;
-                    let max = as_integer(&children[3])?;
-                    Ok((Some(min), Some(max)))
+                    Ok((Some(as_integer(&children[1])?), Some(as_integer(&children[3])?)))
                 },
                 _ => Err(Error::from(ErrorKind::NotRange))
             }
         },
         ParseTree::Token { token } => {
             match token.kind() {
+                // /\*/ => ASTERISK;
                 ASTERISK => {
                     Ok((None, None))
                 },
+                // /\+/ => PLUS_SIGN;
                 PLUS_SIGN => {
                     Ok((Some(1), None))
                 },
+                // /\?/ => QUESTION_MARK;
                 QUESTION_MARK => {
                     Ok((None, Some(1)))
                 },
@@ -234,14 +228,12 @@ fn as_range(parse_tree: &ParseTree<Nonterminal, TokenKind>) -> Result<(Option<u3
 }
 
 fn as_integer(parse_tree: &ParseTree<Nonterminal, TokenKind>) -> Result<u32> {
-    match parse_tree {
-        ParseTree::Token { token } => {
-            if let INTEGER = token.kind() {
-                Ok(token.text().parse::<u32>().unwrap())
-            } else { Err(Error::from(ErrorKind::NotInteger)) }
-        },
-        _ => Err(Error::from(ErrorKind::NotInteger))
-    }
+    if let ParseTree::Token { token } = parse_tree {
+        // /[0-9]+/ => INTEGER;
+        if let INTEGER = token.kind() {
+            Ok(token.text().parse::<u32>().unwrap())
+        } else { Err(Error::from(ErrorKind::NotInteger)) }
+    } else { Err(Error::from(ErrorKind::NotInteger)) }
 }
 
 lazy_static! {
@@ -261,7 +253,7 @@ lazy_static! {
     // /,/ => COMMA;
     // /[\n\r\t ]/ => ;
     // /\/\/[^\n\r]*/ => ;
-    pub(crate) static ref LEXER_PRODUCTIONS: Map<Re, Option<TokenKind>> = map![
+    pub(crate) static ref LEXER_PRODUCTIONS: Map<re_bootstrap::Expression, Option<TokenKind>> = map![
         rcon![
             rsym![rrng!('A', 'Z')], 
             rast!(rsym![
