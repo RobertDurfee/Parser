@@ -1,7 +1,6 @@
 use std::{
     collections::BTreeMap as Map,
     str::FromStr,
-    fmt::Debug,
 };
 use lazy_static::lazy_static;
 use interval_map;
@@ -67,12 +66,7 @@ pub enum Nonterminal {
 }
 use Nonterminal::*;
 
-pub fn as_productions<N, T>(parse_tree: &ParseTree<Nonterminal, TokenKind>) -> Result<Map<N, Expression<N, T>>> 
-where
-    N : Ord + FromStr,
-    <N as FromStr>::Err : Debug,
-    T : FromStr,
-{
+pub fn as_productions<N: FromStr + Ord, T: FromStr>(parse_tree: &ParseTree<Nonterminal, TokenKind>) -> Result<Map<N, Expression<N, T>>> {
     if let ParseTree::Nonterminal { nonterminal, children, .. } = parse_tree {
         match nonterminal {
             // Root ::= Production*;
@@ -92,24 +86,18 @@ where
     } else { Err(Error::from(ErrorKind::NoProductions)) }
 }
 
-fn as_nonterminal<N>(parse_tree: &ParseTree<Nonterminal, TokenKind>) -> Result<N>
-where
-    N : FromStr,
-    <N as FromStr>::Err : Debug
-{
+fn as_nonterminal<N: FromStr>(parse_tree: &ParseTree<Nonterminal, TokenKind>) -> Result<N> {
     if let ParseTree::Token { token } = parse_tree {
         // /[A-Z][0-9A-Z]*[a-z][0-9a-zA-Z]*/ => NONTERMINAL;
         if let NONTERMINAL = token.kind() {
-            Ok(N::from_str(token.text()).unwrap())
+            if let Ok(nonterminal) = N::from_str(token.text()) {
+                Ok(nonterminal)
+            } else { Err(Error::from(ErrorKind::NotNonterminal)) }
         } else { Err(Error::from(ErrorKind::NotNonterminal)) }
     } else { Err(Error::from(ErrorKind::NotNonterminal)) }
 }
 
-fn as_expression<N, T>(parse_tree: &ParseTree<Nonterminal, TokenKind>) -> Result<Expression<N, T>>
-where
-    N : FromStr,
-    T : FromStr,
-{
+fn as_expression<N: FromStr, T: FromStr>(parse_tree: &ParseTree<Nonterminal, TokenKind>) -> Result<Expression<N, T>> {
     match parse_tree {
         ParseTree::Nonterminal { nonterminal, children, .. } => {
             match nonterminal {
@@ -231,7 +219,9 @@ fn as_integer(parse_tree: &ParseTree<Nonterminal, TokenKind>) -> Result<u32> {
     if let ParseTree::Token { token } = parse_tree {
         // /[0-9]+/ => INTEGER;
         if let INTEGER = token.kind() {
-            Ok(token.text().parse::<u32>().unwrap())
+            if let Ok(integer) = token.text().parse::<u32>() {
+                Ok(integer)
+            } else { Err(Error::from(ErrorKind::NotInteger)) }
         } else { Err(Error::from(ErrorKind::NotInteger)) }
     } else { Err(Error::from(ErrorKind::NotInteger)) }
 }

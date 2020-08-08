@@ -1,7 +1,4 @@
-use std::{
-    str::FromStr,
-    fmt::Debug,
-};
+use std::str::FromStr;
 use lexer_bootstrap::{
     Token,
     Lexer,
@@ -22,12 +19,7 @@ pub struct Parser<N, T> {
     parser: ParserBootstrap<N, T>,
 }
 
-impl<N, T> Parser<N, T> 
-where
-    N : FromStr + Ord,
-    <N as FromStr>::Err : Debug,
-    T : FromStr,
-{
+impl<N: FromStr + Ord, T: FromStr> Parser<N, T> {
     pub fn new(productions: &str, root: N) -> Result<Parser<N, T>> {
         let mut lexer = Lexer::new(LEXER_PRODUCTIONS.clone()); lexer.compile();
         let parser = ParserBootstrap::new(PARSER_PRODUCTIONS.clone(), Nonterminal::Root);
@@ -38,11 +30,7 @@ where
     }
 }
 
-impl<N, T> Parser<N, T> 
-where
-    N : Clone + Ord,
-    T : Clone + PartialEq,
-{
+impl<N: Clone + Ord, T: Clone + PartialEq> Parser<N, T> {
     pub fn parse(&self, tokens: &[Token<T>]) -> Result<ParseTree<N, T>> {
         self.parser.parse(tokens)
     }
