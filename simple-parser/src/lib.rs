@@ -1,9 +1,10 @@
 #[macro_use]
+mod util;
 mod parser;
 mod grammar;
 
 pub use crate::parser::Parser;
-pub use parser_bootstrap::{
+pub use simple_parser_bootstrap::{
     ParseTree,
     Expression,
     tok,
@@ -14,5 +15,4 @@ pub use parser_bootstrap::{
     ast,
     plu,
     que,
-    map,
 };

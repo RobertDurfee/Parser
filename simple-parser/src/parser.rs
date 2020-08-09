@@ -1,9 +1,9 @@
 use std::str::FromStr;
-use lexer_bootstrap::{
+use simple_lexer_bootstrap::{
     Token,
     Lexer,
 };
-use parser_bootstrap::Parser as ParserBootstrap;
+use simple_parser_bootstrap::Parser as ParserBootstrap;
 use crate::{
     grammar::{
         LEXER_PRODUCTIONS,
@@ -40,7 +40,7 @@ impl<N: Clone + Ord, T: Clone + PartialEq> Parser<N, T> {
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
-    use lexer_bootstrap::Token;
+    use simple_lexer_bootstrap::Token;
     use crate::{
         Parser,
         ParseTree,

@@ -1,5 +1,5 @@
 [workspace]
 members = [
-    "parser-bootstrap",
-    "parser",
+    "simple-parser-bootstrap",
+    "simple-parser",
 ]

@@ -3,8 +3,8 @@ use std::{
     str::FromStr,
 };
 use lazy_static::lazy_static;
-use interval_map;
-use re_bootstrap::{
+use segment_map;
+use regular_expression_bootstrap::{
     sym as rsym,
     neg as rneg,
     con as rcon,
@@ -23,7 +23,6 @@ use crate::{
     que as pque,
     ParseTree,
     Expression,
-    map,
 };
 
 type Result<T> = std::result::Result<T, &'static str>;
@@ -240,7 +239,7 @@ lazy_static! {
     // /,/ => COMMA;
     // /[\n\r\t ]/ => ;
     // /\/\/[^\n\r]*/ => ;
-    pub(crate) static ref LEXER_PRODUCTIONS: Map<re_bootstrap::Expression, Option<TokenKind>> = map![
+    pub(crate) static ref LEXER_PRODUCTIONS: Map<regular_expression_bootstrap::Expression, Option<TokenKind>> = map![
         rcon![
             rsym![rrng!('A', 'Z')], 
             rast!(rsym![
