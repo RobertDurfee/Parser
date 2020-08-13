@@ -3,18 +3,18 @@ name = "simple-parser"
 version = "0.1.0"
 authors = ["Robert Durfee <rbd@mit.edu>"]
 description = "A simple, runtime recursive descent parser generator."
-license-file = "LICENSE"
-repository = "https://github.com/RobertDurfee/ParserGenerator"
+license = "MIT"
+repository = "https://github.com/RobertDurfee/ParserGenerator/tree/v0.1.0"
 readme = "README.md"
 keywords = ["parser", "parser-generator"]
 categories = ["parsing"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+documentation = "https://docs.rs/simple-parser/0.1.0/simple_parser/"
+homepage = "https://github.com/RobertDurfee/ParserGenerator/tree/v0.1.0"
 
 [dependencies]
 lazy_static = "1.4.0"
-segment-map = "0.1.0"
-regular-expression-bootstrap = "0.1.0"
-simple-lexer-bootstrap = "0.1.0"
-simple-parser-bootstrap = "0.1.0"
+segment-map = { path = "../../SegmentMap", version = "0.1.0" }
+regular-expression-bootstrap = { path = "../../RegularExpression/regular-expression-bootstrap", version = "0.1.0" }
+simple-lexer-bootstrap = { path = "../../LexerGenerator/simple-lexer-bootstrap", version = "0.1.0" }
+simple-parser-bootstrap = { path = "../simple-parser-bootstrap", version = "0.1.0" }
